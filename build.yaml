@@ -20,6 +20,8 @@ targets:
           skip_verification_code: false
           use_data_class_name_for_companions: true
           case_from_dart_to_sql: snake_case
+          use_column_name_as_json_key: true
+          compact_query_methods: true
         generate_for:
           include:
             - lib/src/database/sync_database.dart
@@ -28,3 +30,9 @@ targets:
             - lib/src/core/models/*.dart
             - lib/src/builders/*.dart
             - lib/src/bloc/*.dart
+
+      source_gen:combining_builder:
+        generate_for:
+          exclude:
+            - lib/src/database/**
+            - lib/src/core/models/**

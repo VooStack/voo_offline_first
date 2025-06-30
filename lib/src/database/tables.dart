@@ -19,9 +19,9 @@ class SyncItems extends Table {
 
   @override
   List<Index> get indexes => [
-        Index('idx_entity_type_id', [entityType, entityId] as String),
-        Index('idx_priority', [priority] as String),
-        Index('idx_created_at', [createdAt] as String),
+        Index('idx_entity_type_id', [entityType, entityId]),
+        Index('idx_priority', [priority]),
+        Index('idx_created_at', [createdAt]),
       ];
 }
 
@@ -46,9 +46,9 @@ class EntityMetadataTable extends Table {
 
   @override
   List<Index> get indexes => [
-        Index('idx_entity_type_id_meta', [entityType, entityId] as String),
-        Index('idx_needs_sync', [needsSync] as String),
-        Index('idx_sync_status', [syncStatus] as String),
+        Index('idx_entity_type_id_meta', [entityType, entityId]),
+        Index('idx_needs_sync', [needsSync]),
+        Index('idx_sync_status', [syncStatus]),
       ];
 }
 
@@ -71,9 +71,10 @@ class FileSyncItems extends Table {
   @override
   Set<Column> get primaryKey => {id};
 
+  @override
   List<Index> get indexes => [
-        Index('idx_entity_file', [entityId, entityType] as String),
-        Index('idx_file_path', [filePath] as String),
+        Index('idx_entity_file', [entityId, entityType]),
+        Index('idx_file_path', [filePath]),
       ];
 }
 

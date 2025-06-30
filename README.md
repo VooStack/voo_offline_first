@@ -694,11 +694,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@yourcompany.com
-- 🐛 Issues: [GitHub Issues](https://github.com/yourcompany/offline_first/issues)
-- 📖 Documentation: [Full Documentation](https://docs.yourcompany.com/offline_first)
-- 💬 Discussions: [GitHub Discussions](https://github.com/yourcompany/offline_first/discussions)
+- 📧 Email: support@voostack.com
+- 🐛 Issues: [GitHub Issues](https://github.com/voostack/offline_first/issues)
+- 📖 Documentation: [Full Documentation](https://docs.voostack.com/offline_first)
+- 💬 Discussions: [GitHub Discussions](https://github.com/voostack/offline_first/discussions)
 
 ---
 
-Made with ❤️ by [Your Company](https://yourcompany.com)
+Made with ❤️ by [Your Company](https://voostack.com)

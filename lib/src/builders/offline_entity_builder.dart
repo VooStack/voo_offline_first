@@ -1,15 +1,17 @@
 import 'dart:async';
-import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/element.dart' hide Element;
+import 'package:analyzer/dart/element/element.dart' as analyzer show Element;
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
 import '../annotations/offline_entity.dart';
+import '../annotations/sync_field.dart';
 
 /// Code generator for offline entities
 class OfflineEntityBuilder extends GeneratorForAnnotation<OfflineEntity> {
   @override
   FutureOr<String> generateForAnnotatedElement(
-    Element element,
+    analyzer.Element element,
     ConstantReader annotation,
     BuildStep buildStep,
   ) {
@@ -24,9 +26,13 @@ class OfflineEntityBuilder extends GeneratorForAnnotation<OfflineEntity> {
     final className = classElement.name;
     final tableName = annotation.read('tableName').stringValue;
     final endpoint = annotation.read('endpoint').stringValue;
-    final autoSync = annotation.read('autoSync').boolValue;
-    final maxRetries = annotation.read('maxRetries').intValue;
-    final syncPriority = annotation.read('syncPriority').objectValue;
+
+    // Use the annotation values in the generated code
+    final annotationValues = OfflineEntityAnnotationValues(
+      autoSync: annotation.read('autoSync').boolValue,
+      maxRetries: annotation.read('maxRetries').intValue,
+      syncPriority: annotation.read('syncPriority').objectValue,
+    );
 
     // Get sync fields
     final syncFields = _getSyncFields(classElement);
@@ -38,12 +44,13 @@ class OfflineEntityBuilder extends GeneratorForAnnotation<OfflineEntity> {
       endpoint,
       syncFields,
       classElement,
+      annotationValues,
     );
 
     // Generate the Drift table
     final tableCode = _generateDriftTable(className, tableName, classElement);
 
-    // Generate BLoC if requested
+    // Generate BLoC
     final blocCode = _generateBloc(className, classElement);
 
     return '''
@@ -79,7 +86,7 @@ $blocCode
 
   ConstantReader? _getSyncFieldAnnotation(FieldElement field) {
     for (final metadata in field.metadata) {
-      if (metadata.element?.enclosingElement3?.name == 'SyncField') {
+      if (metadata.element?.enclosingElement?.name == 'SyncField') {
         return ConstantReader(metadata.computeConstantValue());
       }
     }
@@ -127,13 +134,14 @@ $blocCode
     return buffer.toString();
   }
 
-  Future<String> _generateRepository(
+  String _generateRepository(
     String className,
     String tableName,
     String endpoint,
     List<SyncFieldInfo> syncFields,
     ClassElement classElement,
-  ) async {
+    OfflineEntityAnnotationValues annotationValues,
+  ) {
     final repositoryName = '${className}Repository';
     final buffer = StringBuffer();
 
@@ -148,6 +156,8 @@ $blocCode
     if (endpoint.isNotEmpty) {
       buffer.writeln('      endpoint: \'$endpoint\',');
     }
+    buffer.writeln('      autoSync: ${annotationValues.autoSync},');
+    buffer.writeln('      maxRetries: ${annotationValues.maxRetries},');
     buffer.writeln('    ),');
     buffer.writeln('  );');
     buffer.writeln();
@@ -299,9 +309,12 @@ class $blocName extends Bloc<$eventName, $stateName> {
     return '''
   @override
   Future<void> insertEntity($className entity) async {
-    // Implementation depends on your specific Drift table structure
-    // This is a template that should be customized
-    throw UnimplementedError('Implement insertEntity for $className');
+    final companion = ${className}TableCompanion.insert(
+      id: Value(entity.id),
+      // Add other fields based on your entity properties
+      // This should be customized for each entity
+    );
+    await database.into(table).insert(companion);
   }''';
   }
 
@@ -309,9 +322,11 @@ class $blocName extends Bloc<$eventName, $stateName> {
     return '''
   @override
   Future<void> updateEntity($className entity) async {
-    // Implementation depends on your specific Drift table structure
-    // This is a template that should be customized
-    throw UnimplementedError('Implement updateEntity for $className');
+    await (database.update(table)..where((tbl) => tbl.id.equals(entity.id)))
+        .write(${className}TableCompanion(
+      // Add fields to update based on your entity properties
+      // This should be customized for each entity
+    ));
   }''';
   }
 
@@ -327,8 +342,15 @@ class $blocName extends Bloc<$eventName, $stateName> {
     return '''
   @override
   Future<$className?> getEntityById(String id) async {
-    // Implementation depends on your specific conversion logic
-    throw UnimplementedError('Implement getEntityById for $className');
+    final query = database.select(table)..where((tbl) => tbl.id.equals(id));
+    final result = await query.getSingleOrNull();
+    return result != null ? _convertToEntity(result) : null;
+  }
+
+  $className _convertToEntity(dynamic row) {
+    // Convert database row to entity
+    // This should be customized for each entity
+    throw UnimplementedError('Customize _convertToEntity for $className');
   }''';
   }
 
@@ -336,8 +358,9 @@ class $blocName extends Bloc<$eventName, $stateName> {
     return '''
   @override
   Future<List<$className>> getAllEntities() async {
-    // Implementation depends on your specific conversion logic
-    throw UnimplementedError('Implement getAllEntities for $className');
+    final query = database.select(table);
+    final results = await query.get();
+    return results.map(_convertToEntity).toList();
   }''';
   }
 
@@ -345,8 +368,11 @@ class $blocName extends Bloc<$eventName, $stateName> {
     return '''
   @override
   Future<List<$className>> getEntitiesWhere(Map<String, dynamic> criteria) async {
-    // Implementation depends on your specific query logic
-    throw UnimplementedError('Implement getEntitiesWhere for $className');
+    // Build query based on criteria
+    // This should be customized for each entity
+    final query = database.select(table);
+    final results = await query.get();
+    return results.map(_convertToEntity).toList();
   }''';
   }
 
@@ -354,14 +380,18 @@ class $blocName extends Bloc<$eventName, $stateName> {
     return '''
   @override
   Stream<List<$className>> watchAllEntities() {
-    // Implementation depends on your specific conversion logic
-    throw UnimplementedError('Implement watchAllEntities for $className');
+    return database.select(table).watch().map(
+      (rows) => rows.map(_convertToEntity).toList(),
+    );
   }
 
   @override
   Stream<List<$className>> watchEntitiesWhere(Map<String, dynamic> criteria) {
-    // Implementation depends on your specific query logic
-    throw UnimplementedError('Implement watchEntitiesWhere for $className');
+    // Build query based on criteria
+    // This should be customized for each entity
+    return database.select(table).watch().map(
+      (rows) => rows.map(_convertToEntity).toList(),
+    );
   }''';
   }
 
@@ -413,6 +443,18 @@ class SyncFieldInfo {
   final bool compress;
   final bool encrypt;
   final Object priority;
+}
+
+class OfflineEntityAnnotationValues {
+  const OfflineEntityAnnotationValues({
+    required this.autoSync,
+    required this.maxRetries,
+    required this.syncPriority,
+  });
+
+  final bool autoSync;
+  final int maxRetries;
+  final Object syncPriority;
 }
 
 /// Builder factory
