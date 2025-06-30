@@ -26,7 +26,6 @@ export 'src/database/tables.dart';
 
 // Bloc
 export 'src/bloc/sync_bloc.dart';
-export 'src/bloc/sync_event.dart';
 export 'src/bloc/sync_state.dart';
 
 // Exceptions

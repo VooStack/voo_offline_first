@@ -6,32 +6,22 @@ part of 'sync_item.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-SyncItem _$SyncItemFromJson(Map<String, dynamic> json) => $checkedCreate(
-      'SyncItem',
-      json,
-      ($checkedConvert) {
-        final val = SyncItem(
-          id: $checkedConvert('id', (v) => v as String),
-          entityType: $checkedConvert('entityType', (v) => v as String),
-          entityId: $checkedConvert('entityId', (v) => v as String),
-          data: $checkedConvert('data', (v) => v as Map<String, dynamic>),
-          createdAt:
-              $checkedConvert('createdAt', (v) => DateTime.parse(v as String)),
-          status: $checkedConvert('status',
-              (v) => UploadStatus.fromJson(v as Map<String, dynamic>)),
-          priority: $checkedConvert(
-              'priority', (v) => $enumDecode(_$SyncPriorityEnumMap, v)),
-          endpoint: $checkedConvert('endpoint', (v) => v as String?),
-          lastAttemptAt: $checkedConvert('lastAttemptAt',
-              (v) => v == null ? null : DateTime.parse(v as String)),
-          dependencies: $checkedConvert(
-              'dependencies',
-              (v) =>
-                  (v as List<dynamic>?)?.map((e) => e as String).toList() ??
-                  const []),
-        );
-        return val;
-      },
+SyncItem _$SyncItemFromJson(Map<String, dynamic> json) => SyncItem(
+      id: json['id'] as String,
+      entityType: json['entityType'] as String,
+      entityId: json['entityId'] as String,
+      data: json['data'] as Map<String, dynamic>,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      status: UploadStatus.fromJson(json['status'] as Map<String, dynamic>),
+      priority: $enumDecode(_$SyncPriorityEnumMap, json['priority']),
+      endpoint: json['endpoint'] as String?,
+      lastAttemptAt: json['lastAttemptAt'] == null
+          ? null
+          : DateTime.parse(json['lastAttemptAt'] as String),
+      dependencies: (json['dependencies'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
     );
 
 Map<String, dynamic> _$SyncItemToJson(SyncItem instance) => <String, dynamic>{

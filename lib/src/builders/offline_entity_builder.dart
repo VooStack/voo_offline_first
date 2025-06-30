@@ -127,13 +127,13 @@ $blocCode
     return buffer.toString();
   }
 
-  String _generateRepository(
+  Future<String> _generateRepository(
     String className,
     String tableName,
     String endpoint,
     List<SyncFieldInfo> syncFields,
     ClassElement classElement,
-  ) {
+  ) async {
     final repositoryName = '${className}Repository';
     final buffer = StringBuffer();
 

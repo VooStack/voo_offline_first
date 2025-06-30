@@ -100,9 +100,6 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
       await updateEntity(entityWithId);
     }
 
-    // Update metadata
-    await _updateEntityMetadata(finalId, needsSync: true);
-
     // Queue for sync if auto-sync is enabled
     if (offlineEntity.autoSync) {
       await queueForSync(finalId);
@@ -125,7 +122,6 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Future<void> delete(String id) async {
     await deleteEntityById(id);
-    await _deleteEntityMetadata(id);
     await syncManager.cancelSyncItem('${entityType}_$id');
   }
 
@@ -138,44 +134,20 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
 
   @override
   Future<List<T>> getPendingSync() async {
-    final metadata = await database.getEntitiesNeedingSync();
-    final pendingIds = metadata.where((m) => m.entityType == entityType).map((m) => m.entityId).toList();
-
-    final entities = <T>[];
-    for (final id in pendingIds) {
-      final entity = await getById(id);
-      if (entity != null) {
-        entities.add(entity);
-      }
-    }
-
-    return entities;
+    // This will be implemented after code generation
+    return [];
   }
 
   @override
   Future<void> markAsUploaded(String id) async {
-    await _updateEntityMetadata(
-      id,
-      needsSync: false,
-      syncStatus: 'completed',
-      lastSyncedAt: DateTime.now(),
-    );
+    // This will be implemented after code generation
+    throw UnimplementedError('Will be implemented after code generation');
   }
 
   @override
   Future<void> updateUploadStatus(String id, UploadStatus status) async {
-    final syncItemId = '${entityType}_$id';
-    final existingSyncItem = await database.getSyncItemById(syncItemId);
-
-    if (existingSyncItem != null) {
-      final updatedSyncItem = SyncItemsCompanion(
-        id: Value(syncItemId),
-        status: Value(jsonEncode(status.toJson())),
-        lastAttemptAt: status.state == UploadState.uploading ? Value(DateTime.now()) : const Value.absent(),
-      );
-
-      await database.updateSyncItem(updatedSyncItem);
-    }
+    // This will be implemented after code generation
+    throw UnimplementedError('Will be implemented after code generation');
   }
 
   @override
@@ -214,13 +186,14 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
 
   @override
   Stream<List<SyncItem>> watchPendingSync() {
-    return database.watchPendingSyncItems().map((items) => items.where((item) => item.entityType == entityType).map((item) => _syncItemDataToSyncItem(item)).toList());
+    // This will be implemented after code generation
+    return Stream.value([]);
   }
 
   @override
   Stream<UploadStatus?> watchUploadStatus(String id) {
-    final syncItemId = '${entityType}_$id';
-    return database.watchSyncItems().map((items) => items.where((item) => item.id == syncItemId).map((item) => UploadStatus.fromJson(jsonDecode(item.status))).firstOrNull);
+    // This will be implemented after code generation
+    return Stream.value(null);
   }
 
   @override
@@ -239,47 +212,5 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   Future<void> clear() async {
     // Implement based on your specific table
     throw UnimplementedError('Implement clear() in your specific repository');
-  }
-
-  // Helper methods
-
-  Future<void> _updateEntityMetadata(
-    String entityId, {
-    bool? needsSync,
-    String? syncStatus,
-    DateTime? lastSyncedAt,
-  }) async {
-    final now = DateTime.now();
-    final metadata = EntityMetadataTableCompanion(
-      id: Value('${entityType}_$entityId'),
-      entityType: Value(entityType),
-      entityId: Value(entityId),
-      updatedAt: Value(now),
-      needsSync: needsSync != null ? Value(needsSync) : const Value.absent(),
-      syncStatus: syncStatus != null ? Value(syncStatus) : const Value.absent(),
-      lastSyncedAt: lastSyncedAt != null ? Value(lastSyncedAt) : const Value.absent(),
-    );
-
-    await database.upsertEntityMetadata(metadata);
-  }
-
-  Future<void> _deleteEntityMetadata(String entityId) async {
-    // Implementation depends on your database structure
-    // This is a simplified version
-  }
-
-  SyncItem _syncItemDataToSyncItem(SyncItemData data) {
-    return SyncItem(
-      id: data.id,
-      entityType: data.entityType,
-      entityId: data.entityId,
-      data: jsonDecode(data.data),
-      createdAt: data.createdAt,
-      status: UploadStatus.fromJson(jsonDecode(data.status)),
-      priority: SyncPriority.values[data.priority],
-      endpoint: data.endpoint,
-      lastAttemptAt: data.lastAttemptAt,
-      dependencies: List<String>.from(jsonDecode(data.dependencies)),
-    );
   }
 }

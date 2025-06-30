@@ -6,26 +6,17 @@ part of 'upload_status.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-UploadStatus _$UploadStatusFromJson(Map<String, dynamic> json) =>
-    $checkedCreate(
-      'UploadStatus',
-      json,
-      ($checkedConvert) {
-        final val = UploadStatus(
-          state: $checkedConvert(
-              'state', (v) => $enumDecode(_$UploadStateEnumMap, v)),
-          progress: $checkedConvert(
-              'progress', (v) => (v as num?)?.toDouble() ?? 0.0),
-          error: $checkedConvert('error', (v) => v as String?),
-          uploadedAt: $checkedConvert('uploadedAt',
-              (v) => v == null ? null : DateTime.parse(v as String)),
-          retryCount:
-              $checkedConvert('retryCount', (v) => (v as num?)?.toInt() ?? 0),
-          nextRetryAt: $checkedConvert('nextRetryAt',
-              (v) => v == null ? null : DateTime.parse(v as String)),
-        );
-        return val;
-      },
+UploadStatus _$UploadStatusFromJson(Map<String, dynamic> json) => UploadStatus(
+      state: $enumDecode(_$UploadStateEnumMap, json['state']),
+      progress: (json['progress'] as num?)?.toDouble() ?? 0.0,
+      error: json['error'] as String?,
+      uploadedAt: json['uploadedAt'] == null
+          ? null
+          : DateTime.parse(json['uploadedAt'] as String),
+      retryCount: (json['retryCount'] as num?)?.toInt() ?? 0,
+      nextRetryAt: json['nextRetryAt'] == null
+          ? null
+          : DateTime.parse(json['nextRetryAt'] as String),
     );
 
 Map<String, dynamic> _$UploadStatusToJson(UploadStatus instance) =>

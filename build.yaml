@@ -10,10 +10,10 @@ targets:
         generate_for:
           include:
             - lib/src/core/models/*.dart
-            - lib/src/bloc/*.dart
           exclude:
             - lib/src/annotations/*.dart
             - lib/src/database/*.dart
+            - lib/src/builders/*.dart
 
       drift_dev:
         options:
@@ -22,8 +22,9 @@ targets:
           case_from_dart_to_sql: snake_case
         generate_for:
           include:
-            - lib/src/database/*.dart
+            - lib/src/database/sync_database.dart
           exclude:
             - lib/src/annotations/*.dart
             - lib/src/core/models/*.dart
+            - lib/src/builders/*.dart
             - lib/src/bloc/*.dart
