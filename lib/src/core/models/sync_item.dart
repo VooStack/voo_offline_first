@@ -20,6 +20,8 @@ class SyncItem extends Equatable {
     this.dependencies = const [],
   });
 
+  factory SyncItem.fromJson(Map<String, dynamic> json) => _$SyncItemFromJson(json);
+
   /// Unique identifier for this sync item
   final String id;
 
@@ -81,8 +83,6 @@ class SyncItem extends Equatable {
       dependencies: dependencies ?? this.dependencies,
     );
   }
-
-  factory SyncItem.fromJson(Map<String, dynamic> json) => _$SyncItemFromJson(json);
 
   Map<String, dynamic> toJson() => _$SyncItemToJson(this);
 

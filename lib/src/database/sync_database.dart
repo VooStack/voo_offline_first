@@ -10,7 +10,6 @@ import 'tables.dart';
 
 part 'sync_database.g.dart';
 
-/// Main database class for offline sync functionality
 @DriftDatabase(
   tables: [
     SyncItems,
@@ -33,11 +32,7 @@ class SyncDatabase extends _$SyncDatabase {
         await _insertDefaultConfigs();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        // Handle future schema migrations here
-        if (from < 2) {
-          // Example migration for version 2
-          // await m.addColumn(syncItems, syncItems.newColumn);
-        }
+        if (from < 2) {}
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -46,17 +41,15 @@ class SyncDatabase extends _$SyncDatabase {
     );
   }
 
-  /// Insert default sync configurations
   Future<void> _insertDefaultConfigs() async {
     try {
-      // Default configuration for general entities
       await into(syncConfigs).insert(
         SyncConfigsCompanion.insert(
           entityType: 'default',
           endpoint: const Value(null),
           autoSync: const Value(true),
           maxRetries: const Value(3),
-          retryDelaySeconds: const Value(300), // 5 minutes
+          retryDelaySeconds: const Value(300),
           batchSize: const Value(10),
           syncFields: '[]',
           createdAt: DateTime.now(),
@@ -65,19 +58,15 @@ class SyncDatabase extends _$SyncDatabase {
         mode: InsertMode.insertOrIgnore,
       );
     } catch (e) {
-      // Log error but don't throw to avoid breaking database initialization
-      // In a real app, use a proper logging framework
       debugPrint('Warning: Failed to insert default configs: $e');
     }
   }
 
-  /// Get sync configuration for an entity type
   Future<SyncConfigData?> getSyncConfig(String entityType) async {
     final query = select(syncConfigs)..where((tbl) => tbl.entityType.equals(entityType));
 
     final result = await query.getSingleOrNull();
 
-    // If no specific config exists, get default
     if (result == null) {
       final defaultQuery = select(syncConfigs)..where((tbl) => tbl.entityType.equals('default'));
       return await defaultQuery.getSingleOrNull();
@@ -86,7 +75,6 @@ class SyncDatabase extends _$SyncDatabase {
     return result;
   }
 
-  /// Update or create sync configuration
   Future<void> updateSyncConfig(SyncConfigData config) async {
     await into(syncConfigs).insert(
       config.toCompanion(true),
@@ -94,7 +82,6 @@ class SyncDatabase extends _$SyncDatabase {
     );
   }
 
-  /// Get all pending sync items ordered by priority
   Future<List<SyncItemData>> getPendingSyncItems() async {
     final query = select(syncItems)
       ..where((tbl) => tbl.status.contains('"state":"pending"'))
@@ -106,7 +93,6 @@ class SyncDatabase extends _$SyncDatabase {
     return await query.get();
   }
 
-  /// Get sync items by entity type
   Future<List<SyncItemData>> getSyncItemsByEntityType(String entityType) async {
     final query = select(syncItems)
       ..where((tbl) => tbl.entityType.equals(entityType))
@@ -118,7 +104,6 @@ class SyncDatabase extends _$SyncDatabase {
     return await query.get();
   }
 
-  /// Get failed sync items that are ready for retry
   Future<List<SyncItemData>> getRetryReadySyncItems() async {
     final cutoffTime = DateTime.now().subtract(const Duration(minutes: 5));
     final query = select(syncItems)..where((tbl) => tbl.status.contains('"state":"failed"') & tbl.lastAttemptAt.isSmallerThanValue(cutoffTime));
@@ -126,7 +111,6 @@ class SyncDatabase extends _$SyncDatabase {
     return await query.get();
   }
 
-  /// Clean up old completed sync items
   Future<int> cleanupOldSyncItems({Duration olderThan = const Duration(days: 7)}) async {
     final cutoffDate = DateTime.now().subtract(olderThan);
 
@@ -135,14 +119,12 @@ class SyncDatabase extends _$SyncDatabase {
     return await deleteQuery.go();
   }
 
-  /// Get entity metadata for an entity
   Future<EntityMetadata?> getEntityMetadata(String entityType, String entityId) async {
     final query = select(entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType) & tbl.entityId.equals(entityId));
 
     return await query.getSingleOrNull();
   }
 
-  /// Get entities that need sync
   Future<List<EntityMetadata>> getEntitiesNeedingSync(String entityType) async {
     final query = select(entityMetadataTable)
       ..where((tbl) => tbl.entityType.equals(entityType) & tbl.needsSync.equals(true))
@@ -153,14 +135,12 @@ class SyncDatabase extends _$SyncDatabase {
     return await query.get();
   }
 
-  /// Get file sync items for an entity
   Future<List<FileSyncData>> getFileSyncItems(String entityId, String entityType) async {
     final query = select(fileSyncItems)..where((tbl) => tbl.entityId.equals(entityId) & tbl.entityType.equals(entityType));
 
     return await query.get();
   }
 
-  /// Get pending file uploads
   Future<List<FileSyncData>> getPendingFileUploads() async {
     final query = select(fileSyncItems)
       ..where((tbl) => tbl.uploadStatus.contains('"state":"pending"'))
@@ -171,14 +151,14 @@ class SyncDatabase extends _$SyncDatabase {
     return await query.get();
   }
 
-  /// Update file upload status
   Future<void> updateFileUploadStatus(String fileId, String status) async {
-    await (update(fileSyncItems)..where((tbl) => tbl.id.equals(fileId))).write(FileSyncItemsCompanion(
-      uploadStatus: Value(status),
-    ));
+    await (update(fileSyncItems)..where((tbl) => tbl.id.equals(fileId))).write(
+      FileSyncItemsCompanion(
+        uploadStatus: Value(status),
+      ),
+    );
   }
 
-  /// Get sync statistics
   Future<Map<String, dynamic>> getSyncStatistics() async {
     final totalQuery = selectOnly(syncItems)..addColumns([syncItems.id.count()]);
     final total = await totalQuery.getSingle();
@@ -206,27 +186,21 @@ class SyncDatabase extends _$SyncDatabase {
     };
   }
 
-  /// Watch sync queue changes
   Stream<List<SyncItemData>> watchSyncQueue() {
     return select(syncItems).watch();
   }
 
-  /// Watch entity metadata changes
   Stream<List<EntityMetadata>> watchEntityMetadata(String entityType) {
     return (select(entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType))).watch();
   }
 
-  /// Perform database maintenance
   Future<void> performMaintenance() async {
     try {
-      // Clean up old completed sync items
       final cleaned = await cleanupOldSyncItems();
       debugPrint('Cleaned up $cleaned old sync items');
 
-      // Vacuum the database to reclaim space
       await customStatement('VACUUM');
 
-      // Analyze the database for better query planning
       await customStatement('ANALYZE');
 
       debugPrint('Database maintenance completed');
@@ -235,7 +209,6 @@ class SyncDatabase extends _$SyncDatabase {
     }
   }
 
-  /// Export data for debugging
   Future<Map<String, dynamic>> exportDebugData() async {
     try {
       final syncItemsData = await select(syncItems).get();
@@ -291,7 +264,6 @@ class SyncDatabase extends _$SyncDatabase {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    // Make sure sqlite3 is properly initialized on mobile platforms
     if (Platform.isAndroid) {
       await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
     }
@@ -301,17 +273,15 @@ LazyDatabase _openConnection() {
 
     return NativeDatabase.createInBackground(
       file,
-      logStatements: false, // Set to true for debugging
+      logStatements: false,
     );
   });
 }
 
-// Helper function for debugging prints
 void debugPrint(String message) {
   if (const bool.fromEnvironment('dart.vm.product')) {
-    // Don't print in production
     return;
   }
-  // ignore: avoid_print
+
   print(message);
 }

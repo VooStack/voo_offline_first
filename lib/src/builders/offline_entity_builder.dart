@@ -5,7 +5,6 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
 import '../annotations/offline_entity.dart';
-import '../annotations/sync_field.dart';
 
 /// Code generator for offline entities
 class OfflineEntityBuilder extends GeneratorForAnnotation<OfflineEntity> {
@@ -71,13 +70,15 @@ $blocCode
     for (final field in classElement.fields) {
       final syncFieldAnnotation = _getSyncFieldAnnotation(field);
       if (syncFieldAnnotation != null) {
-        syncFields.add(SyncFieldInfo(
-          name: field.name,
-          type: syncFieldAnnotation.read('type').objectValue,
-          compress: syncFieldAnnotation.read('compress').boolValue,
-          encrypt: syncFieldAnnotation.read('encrypt').boolValue,
-          priority: syncFieldAnnotation.read('priority').objectValue,
-        ));
+        syncFields.add(
+          SyncFieldInfo(
+            name: field.name,
+            type: syncFieldAnnotation.read('type').objectValue,
+            compress: syncFieldAnnotation.read('compress').boolValue,
+            encrypt: syncFieldAnnotation.read('encrypt').boolValue,
+            priority: syncFieldAnnotation.read('priority').objectValue,
+          ),
+        );
       }
     }
 
@@ -86,7 +87,7 @@ $blocCode
 
   ConstantReader? _getSyncFieldAnnotation(FieldElement field) {
     for (final metadata in field.metadata) {
-      if (metadata.element?.enclosingElement?.name == 'SyncField') {
+      if (metadata.element?.enclosingElement3?.name == 'SyncField') {
         return ConstantReader(metadata.computeConstantValue());
       }
     }

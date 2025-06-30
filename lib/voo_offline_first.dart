@@ -21,7 +21,7 @@ export 'src/sync/sync_manager_impl.dart';
 export 'src/connectivity/connectivity_service_impl.dart';
 
 // Database
-export 'src/database/sync_database.dart';
+// export 'src/database/sync_database.dart';
 export 'src/database/tables.dart';
 
 // Bloc

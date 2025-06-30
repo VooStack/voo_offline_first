@@ -14,6 +14,7 @@ class UploadStatus extends Equatable {
     this.retryCount = 0,
     this.nextRetryAt,
   });
+  factory UploadStatus.fromJson(Map<String, dynamic> json) => _$UploadStatusFromJson(json);
 
   /// The current state of the upload
   final UploadState state;
@@ -58,8 +59,6 @@ class UploadStatus extends Equatable {
       nextRetryAt: nextRetryAt ?? this.nextRetryAt,
     );
   }
-
-  factory UploadStatus.fromJson(Map<String, dynamic> json) => _$UploadStatusFromJson(json);
 
   Map<String, dynamic> toJson() => _$UploadStatusToJson(this);
 

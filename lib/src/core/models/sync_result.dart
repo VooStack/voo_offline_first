@@ -9,18 +9,6 @@ class SyncResult extends Equatable {
     this.syncedAt,
   });
 
-  /// Whether the sync was successful
-  final bool success;
-
-  /// Error message if sync failed
-  final String? error;
-
-  /// Response data from the server
-  final Map<String, dynamic>? responseData;
-
-  /// When the sync was completed
-  final DateTime? syncedAt;
-
   /// Create a successful sync result
   factory SyncResult.success({
     Map<String, dynamic>? responseData,
@@ -40,6 +28,18 @@ class SyncResult extends Equatable {
       syncedAt: DateTime.now(),
     );
   }
+
+  /// Whether the sync was successful
+  final bool success;
+
+  /// Error message if sync failed
+  final String? error;
+
+  /// Response data from the server
+  final Map<String, dynamic>? responseData;
+
+  /// When the sync was completed
+  final DateTime? syncedAt;
 
   @override
   List<Object?> get props => [success, error, responseData, syncedAt];
