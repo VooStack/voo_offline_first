@@ -1,0 +1,29 @@
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          explicit_to_json: true
+          create_factory: true
+          create_to_json: true
+          include_if_null: true
+        generate_for:
+          include:
+            - lib/src/core/models/*.dart
+            - lib/src/bloc/*.dart
+          exclude:
+            - lib/src/annotations/*.dart
+            - lib/src/database/*.dart
+
+      drift_dev:
+        options:
+          skip_verification_code: false
+          use_data_class_name_for_companions: true
+          case_from_dart_to_sql: snake_case
+        generate_for:
+          include:
+            - lib/src/database/*.dart
+          exclude:
+            - lib/src/annotations/*.dart
+            - lib/src/core/models/*.dart
+            - lib/src/bloc/*.dart
