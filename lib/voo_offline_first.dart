@@ -1,40 +1,32 @@
-/// A Flutter package for offline-first functionality with clean architecture
-library voo_offline_first;
+/// Offline First Package - A Flutter package for building offline-first applications
+library offline_first;
 
-// Core Interfaces
-export 'src/core/interfaces/offline_repository.dart';
-export 'src/core/interfaces/sync_manager.dart';
-export 'src/core/interfaces/connectivity_service.dart';
+// Core exports
+export 'src/core/database/drift_database.dart';
+export 'src/core/database/database_config.dart';
+export 'src/core/error/exceptions.dart';
+export 'src/core/error/failures.dart';
+export 'src/core/network/network_info.dart';
+export 'src/core/sync/sync_manager.dart';
+export 'src/core/sync/sync_status.dart';
 
-// Models
-export 'src/core/models/sync_item.dart';
-export 'src/core/models/upload_status.dart';
-export 'src/core/models/sync_result.dart';
+// Domain exports
+export 'src/domain/entities/base_entity.dart';
+export 'src/domain/entities/syncable_entity.dart';
+export 'src/domain/repositories/base_repository.dart';
+export 'src/domain/usecases/base_usecase.dart';
 
-// Annotations for Code Generation
-export 'src/annotations/offline_entity.dart';
-export 'src/annotations/sync_field.dart';
+// Data exports
+export 'src/data/models/base_model.dart';
+export 'src/data/models/syncable_model.dart';
+export 'src/data/datasources/local_datasource.dart';
+export 'src/data/datasources/remote_datasource.dart';
+export 'src/data/repositories/base_repository_impl.dart';
 
-// Base Implementations
-export 'src/repositories/base_offline_repository.dart';
-export 'src/sync/sync_manager_impl.dart';
-export 'src/connectivity/connectivity_service_impl.dart';
-
-// Database - Export both the tables and the database class
-export 'src/database/tables.dart';
-export 'src/database/sync_database.dart' hide debugPrint;
-
-// Bloc
-export 'src/bloc/sync_bloc.dart';
-export 'src/bloc/sync_state.dart';
-export 'src/bloc/sync_event.dart';
-
-// Widgets
-export 'src/widgets/sync_status_widgets.dart';
-
-// Exceptions
-export 'src/core/exceptions/offline_exceptions.dart';
+// Presentation exports
+export 'src/presentation/widgets/offline_builder.dart';
+export 'src/presentation/widgets/sync_indicator.dart';
 
 // Utils
-export 'src/utils/sync_utils.dart';
-export 'src/utils/retry_policy.dart';
+export 'src/core/utils/typedef.dart';
+export 'src/core/utils/constants.dart';
