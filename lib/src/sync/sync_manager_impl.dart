@@ -2,17 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
 
-import '../core/interfaces/sync_manager.dart';
-import '../core/interfaces/connectivity_service.dart';
-import '../core/models/sync_item.dart';
-import '../core/models/sync_result.dart';
-import '../core/models/upload_status.dart';
-import '../database/sync_database.dart';
-import '../utils/retry_policy.dart';
-import '../utils/sync_utils.dart';
-import '../core/exceptions/offline_exceptions.dart';
-import '../annotations/offline_entity.dart';
 
 /// Implementation of SyncManager that handles sync operations
 class SyncManagerImpl implements SyncManager {
@@ -419,7 +411,7 @@ class SyncManagerImpl implements SyncManager {
 
   void _ensureInitialized() {
     if (!_isInitialized) {
-      throw NotInitializedException(
+      throw const NotInitializedException(
         'SyncManager not initialized. Call initialize() first.',
         serviceName: 'SyncManager',
       );

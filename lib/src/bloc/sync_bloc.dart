@@ -68,7 +68,7 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
           );
 
       _syncStatusSubscription = syncManager.watchSyncStatus().listen(
-            (status) => add(SyncStatusChanged(status as SyncStatus)),
+            (status) => add(SyncStatusChanged(status)),
           );
 
       _syncProgressSubscription = syncManager.watchSyncProgress().listen(

@@ -87,11 +87,13 @@ class TestHelpers {
       final priority = availablePriorities[i % availablePriorities.length];
       final state = availableStates[i % availableStates.length];
 
-      items.add(createTestSyncItem(
-        id: 'test_item_$i',
-        priority: priority,
-        status: createTestUploadStatus(state: state),
-      ));
+      items.add(
+        createTestSyncItem(
+          id: 'test_item_$i',
+          priority: priority,
+          status: createTestUploadStatus(state: state),
+        ),
+      );
     }
 
     return items;
@@ -215,8 +217,6 @@ class TestHelpers {
 
   /// Creates a memory-efficient test database path
   static String getTestDatabasePath([String? testName]) {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final name = testName ?? 'test';
     return ':memory:'; // Use in-memory database for tests
   }
 
@@ -463,7 +463,7 @@ class _SyncItemMatcher extends Matcher {
   final SyncItem expected;
 
   @override
-  bool matches(dynamic item, Map<String, dynamic> matchState) {
+  bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
     if (item is! SyncItem) return false;
     return TestHelpers.syncItemsEqualIgnoringTimestamps(item, expected);
   }
@@ -480,7 +480,7 @@ class _UploadStateMatcher extends Matcher {
   final UploadState expected;
 
   @override
-  bool matches(dynamic item, Map<String, dynamic> matchState) {
+  bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
     if (item is UploadStatus) {
       return item.state == expected;
     }
@@ -498,7 +498,7 @@ class _UploadStateMatcher extends Matcher {
 
 class _SyncQueueOrderMatcher extends Matcher {
   @override
-  bool matches(dynamic item, Map<String, dynamic> matchState) {
+  bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
     if (item is! List<SyncItem>) return false;
     return TestHelpers.isSyncQueueOrderedByPriority(item);
   }
@@ -511,7 +511,7 @@ class _SyncQueueOrderMatcher extends Matcher {
 
 class _RetryableExceptionMatcher extends Matcher {
   @override
-  bool matches(dynamic item, Map<String, dynamic> matchState) {
+  bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
     if (item is SyncException) {
       return item.retryable;
     }
@@ -567,29 +567,35 @@ class TestDataBuilder {
     }
 
     // Create sync items with proper dependencies
-    syncItems.add(TestHelpers.createTestSyncItem(
-      id: 'sync_$userId',
-      entityId: userId,
-      data: entities[userId]!,
-      priority: SyncPriority.high,
-    ));
+    syncItems.add(
+      TestHelpers.createTestSyncItem(
+        id: 'sync_$userId',
+        entityId: userId,
+        data: entities[userId]!,
+        priority: SyncPriority.high,
+      ),
+    );
 
-    syncItems.add(TestHelpers.createTestSyncItem(
-      id: 'sync_$profileId',
-      entityId: profileId,
-      data: entities[profileId]!,
-      dependencies: ['sync_$userId'],
-      priority: SyncPriority.normal,
-    ));
+    syncItems.add(
+      TestHelpers.createTestSyncItem(
+        id: 'sync_$profileId',
+        entityId: profileId,
+        data: entities[profileId]!,
+        dependencies: ['sync_$userId'],
+        priority: SyncPriority.normal,
+      ),
+    );
 
     for (final orderId in orderIds) {
-      syncItems.add(TestHelpers.createTestSyncItem(
-        id: 'sync_$orderId',
-        entityId: orderId,
-        data: entities[orderId]!,
-        dependencies: ['sync_$userId'],
-        priority: SyncPriority.low,
-      ));
+      syncItems.add(
+        TestHelpers.createTestSyncItem(
+          id: 'sync_$orderId',
+          entityId: orderId,
+          data: entities[orderId]!,
+          dependencies: ['sync_$userId'],
+          priority: SyncPriority.low,
+        ),
+      );
     }
 
     return TestScenario(

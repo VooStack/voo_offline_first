@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:voo_offline_first/src/core/models/sync_progress.dart';
 import 'package:voo_offline_first/voo_offline_first.dart';
 
@@ -378,6 +376,15 @@ class MockConnectivityServiceImpl implements ConnectivityService {
 
 /// Mock implementation of OfflineRepository for testing
 class MockOfflineRepository<T> implements OfflineRepository<T> {
+  MockOfflineRepository({
+    required String Function(T) getId,
+    required T Function(T, String) setId,
+    required Map<String, dynamic> Function(T) toJson,
+    required T Function(Map<String, dynamic>) fromJson,
+  })  : _getId = getId,
+        _setId = setId,
+        _toJson = toJson,
+        _fromJson = fromJson;
   final Map<String, T> _storage = {};
   final Map<String, UploadStatus> _uploadStatuses = {};
   final Set<String> _pendingSyncItems = {};
@@ -390,16 +397,6 @@ class MockOfflineRepository<T> implements OfflineRepository<T> {
   final T Function(T, String) _setId;
   final Map<String, dynamic> Function(T) _toJson;
   final T Function(Map<String, dynamic>) _fromJson;
-
-  MockOfflineRepository({
-    required String Function(T) getId,
-    required T Function(T, String) setId,
-    required Map<String, dynamic> Function(T) toJson,
-    required T Function(Map<String, dynamic>) fromJson,
-  })  : _getId = getId,
-        _setId = setId,
-        _toJson = toJson,
-        _fromJson = fromJson;
 
   @override
   Future<List<T>> getAll() async {
@@ -575,6 +572,11 @@ class MockOfflineRepository<T> implements OfflineRepository<T> {
 
 /// Test entity for use in mock repository
 class TestEntity {
+  factory TestEntity.fromJson(Map<String, dynamic> json) => TestEntity(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        description: json['description'] as String,
+      );
   const TestEntity({
     required this.id,
     required this.name,
@@ -602,12 +604,6 @@ class TestEntity {
         'name': name,
         'description': description,
       };
-
-  factory TestEntity.fromJson(Map<String, dynamic> json) => TestEntity(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        description: json['description'] as String,
-      );
 
   @override
   bool operator ==(Object other) =>
