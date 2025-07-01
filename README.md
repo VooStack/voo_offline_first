@@ -1,8 +1,8 @@
-# 🚀 Offline First Flutter Package
+# 🚀 VooOfflineFirst - Flutter Offline-First Package
 
-[![pub package](https://img.shields.io/pub/v/offline_first.svg)](https://pub.dev/packages/offline_first)
-[![GitHub license](https://img.shields.io/github/license/yourcompany/offline_first)](https://github.com/yourcompany/offline_first/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/yourcompany/offline_first)](https://github.com/yourcompany/offline_first/stargazers)
+[![pub package](https://img.shields.io/pub/v/voo_offline_first.svg)](https://pub.dev/packages/voo_offline_first)
+[![GitHub license](https://img.shields.io/github/license/voostack/voo_offline_first)](https://github.com/voostack/voo_offline_first/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/voostack/voo_offline_first)](https://github.com/voostack/voo_offline_first/stargazers)
 
 A comprehensive Flutter package that enables **offline-first functionality** with automatic synchronization, built with **clean architecture** principles and powered by **Drift** database and **BLoC** state management.
 
@@ -25,7 +25,7 @@ Perfect for field applications, mobile-first experiences, and any app that needs
 
 ## 🎯 Use Cases
 
-- **Field Data Collection**: Perfect for apps like GoodCatch safety reporting
+- **Field Data Collection**: Perfect for apps like safety reporting, inspections, surveys
 - **Mobile-First Applications**: Apps that prioritize offline functionality
 - **IoT and Remote Work**: Applications for areas with poor connectivity
 - **Enterprise Solutions**: Business apps requiring reliable data synchronization
@@ -33,11 +33,14 @@ Perfect for field applications, mobile-first experiences, and any app that needs
 
 ## 📦 Installation
 
+### Step 1: Add Dependencies
+
 Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  offline_first: ^1.0.0
+  # Core package
+  voo_offline_first: ^1.0.0
   
   # Required peer dependencies
   drift: ^2.14.0
@@ -49,157 +52,435 @@ dependencies:
   connectivity_plus: ^5.0.0
   uuid: ^4.0.0
   json_annotation: ^4.8.0
+  path_provider: ^2.1.0
 
 dev_dependencies:
+  # Code generation
   build_runner: ^2.4.0
   drift_dev: ^2.14.0
   json_serializable: ^6.7.0
 ```
 
-Then run:
+### Step 2: Install Packages
+
 ```bash
 flutter pub get
+```
+
+### Step 3: Run Code Generation
+
+```bash
 dart run build_runner build
 ```
 
-## 🚀 Quick Start
+## 🚀 Quick Start Guide
 
-### 1. Define Your Entity
+Let's build a simple task management app that works offline!
 
-Create your data model with offline annotations:
+### Step 1: Define Your Data Model
+
+Create `lib/models/task.dart`:
 
 ```dart
+import 'package:equatable/equatable.dart';
+import 'package:json_annotation/json_annotation.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
+
+part 'task.g.dart';
+
 @OfflineEntity(
-  tableName: 'good_catches',
-  endpoint: '/api/good-catches',
-  syncFields: ['images', 'location'],
-  syncPriority: SyncPriority.high,
+  tableName: 'tasks',
+  endpoint: '/api/tasks',
+  syncPriority: SyncPriority.normal,
 )
 @JsonSerializable()
-class GoodCatch extends Equatable {
-  const GoodCatch({
+class Task extends Equatable {
+  const Task({
     required this.id,
     required this.title,
     required this.description,
-    required this.location,
-    required this.images,
+    required this.isCompleted,
     required this.createdAt,
-    required this.reporterId,
   });
 
   final String id;
   final String title;
   final String description;
-  
-  @SyncField(type: SyncFieldType.location, priority: SyncFieldPriority.high)
-  final GoodCatchLocation location;
-  
-  @SyncField(type: SyncFieldType.fileList)
-  final List<String> images;
-  
+  final bool isCompleted;
   final DateTime createdAt;
-  final String reporterId;
 
-  // Required methods
-  GoodCatch copyWith({...});
-  factory GoodCatch.fromJson(Map<String, dynamic> json) => _$GoodCatchFromJson(json);
-  Map<String, dynamic> toJson() => _$GoodCatchToJson(this);
-  
-  @override
-  List<Object?> get props => [id, title, description, location, images, createdAt, reporterId];
-}
-```
+  // Required for serialization
+  factory Task.fromJson(Map<String, dynamic> json) => _$TaskFromJson(json);
+  Map<String, dynamic> toJson() => _$TaskToJson(this);
 
-### 2. Create Your Repository
-
-Extend the base repository:
-
-```dart
-class GoodCatchRepository extends BaseOfflineRepository<GoodCatch> {
-  GoodCatchRepository({
-    required super.database,
-    required super.syncManager,
-  }) : super(
-    entityType: 'GoodCatch',
-    offlineEntity: const OfflineEntity(
-      tableName: 'good_catches',
-      endpoint: '/api/good-catches',
-    ),
-  );
-
-  // Implement required abstract methods
-  @override
-  Map<String, dynamic> toJson(GoodCatch entity) => entity.toJson();
-
-  @override
-  GoodCatch fromJson(Map<String, dynamic> json) => GoodCatch.fromJson(json);
-
-  @override
-  String getId(GoodCatch entity) => entity.id;
-
-  @override
-  GoodCatch setId(GoodCatch entity, String id) => entity.copyWith(id: id);
-
-  // Implement CRUD operations (see full example in documentation)
-  @override
-  Future<void> insertEntity(GoodCatch entity) async {
-    // Your Drift table insert logic
+  // Required for state management
+  Task copyWith({
+    String? id,
+    String? title,
+    String? description,
+    bool? isCompleted,
+    DateTime? createdAt,
+  }) {
+    return Task(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      isCompleted: isCompleted ?? this.isCompleted,
+      createdAt: createdAt ?? this.createdAt,
+    );
   }
-  
-  // ... other required methods
+
+  @override
+  List<Object?> get props => [id, title, description, isCompleted, createdAt];
 }
 ```
 
-### 3. Setup Your App
+### Step 2: Create Database Tables
 
-Initialize the offline-first system:
+Create `lib/database/app_database.dart`:
 
 ```dart
-class MyApp extends StatelessWidget {
+import 'dart:io';
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:voo_offline_first/voo_offline_first.dart';
+import '../models/task.dart';
+
+part 'app_database.g.dart';
+
+// Define your app's tables
+@DataClassName('TaskData')
+class Tasks extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get description => text()();
+  BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
+
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: OfflineFirstProvider(
-        child: HomeScreen(),
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(
+  tables: [Tasks, SyncItems, EntityMetadataTable, FileSyncItems, SyncConfigs],
+  include: {'package:voo_offline_first/src/database/tables.drift'},
+)
+class AppDatabase extends _$AppDatabase {
+  AppDatabase() : super(_openConnection());
+
+  @override
+  int get schemaVersion => 1;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (Migrator m) async {
+      await m.createAll();
+    },
+  );
+}
+
+LazyDatabase _openConnection() {
+  return LazyDatabase(() async {
+    final dbFolder = await getApplicationDocumentsDirectory();
+    final file = File(p.join(dbFolder.path, 'app_database.db'));
+    return NativeDatabase(file);
+  });
+}
+```
+
+### Step 3: Create Repository
+
+Create `lib/repositories/task_repository.dart`:
+
+```dart
+import 'package:drift/drift.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
+import '../models/task.dart';
+import '../database/app_database.dart';
+
+class TaskRepository extends BaseOfflineRepository<Task> {
+  TaskRepository({
+    required AppDatabase database,
+    required SyncManager syncManager,
+  }) : _appDatabase = database, 
+       super(
+         database: database,
+         syncManager: syncManager,
+         entityType: 'Task',
+         offlineEntity: const OfflineEntity(
+           tableName: 'tasks',
+           endpoint: '/api/tasks',
+         ),
+       );
+
+  final AppDatabase _appDatabase;
+
+  @override
+  String get tableName => 'tasks';
+
+  @override
+  Map<String, dynamic> toJson(Task entity) => entity.toJson();
+
+  @override
+  Task fromJson(Map<String, dynamic> json) => Task.fromJson(json);
+
+  @override
+  String getId(Task entity) => entity.id;
+
+  @override
+  Task setId(Task entity, String id) => entity.copyWith(id: id);
+
+  @override
+  Future<void> insertEntity(Task entity) async {
+    await _appDatabase.into(_appDatabase.tasks).insert(
+      TasksCompanion.insert(
+        id: entity.id,
+        title: entity.title,
+        description: entity.description,
+        isCompleted: entity.isCompleted,
+        createdAt: entity.createdAt,
       ),
     );
   }
-}
-
-class OfflineFirstProvider extends StatefulWidget {
-  final Widget child;
-  const OfflineFirstProvider({required this.child});
 
   @override
-  State<OfflineFirstProvider> createState() => _OfflineFirstProviderState();
-}
-
-class _OfflineFirstProviderState extends State<OfflineFirstProvider> {
-  late final SyncDatabase database;
-  late final SyncManager syncManager;
-  late final ConnectivityService connectivityService;
-  late final GoodCatchRepository repository;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeServices();
+  Future<void> updateEntity(Task entity) async {
+    await (_appDatabase.update(_appDatabase.tasks)
+          ..where((tbl) => tbl.id.equals(entity.id)))
+        .write(TasksCompanion(
+          title: Value(entity.title),
+          description: Value(entity.description),
+          isCompleted: Value(entity.isCompleted),
+        ));
   }
 
-  Future<void> _initializeServices() async {
-    // Initialize core services
-    database = SyncDatabase();
+  @override
+  Future<void> deleteEntityById(String id) async {
+    await (_appDatabase.delete(_appDatabase.tasks)
+          ..where((tbl) => tbl.id.equals(id)))
+        .go();
+  }
+
+  @override
+  Future<Task?> getEntityById(String id) async {
+    final query = _appDatabase.select(_appDatabase.tasks)
+      ..where((tbl) => tbl.id.equals(id));
+    final result = await query.getSingleOrNull();
+    return result != null ? _convertToTask(result) : null;
+  }
+
+  @override
+  Future<List<Task>> getAllEntities() async {
+    final query = _appDatabase.select(_appDatabase.tasks);
+    final results = await query.get();
+    return results.map(_convertToTask).toList();
+  }
+
+  @override
+  Future<List<Task>> getEntitiesWhere(Map<String, dynamic> criteria) async {
+    var query = _appDatabase.select(_appDatabase.tasks);
+    
+    if (criteria.containsKey('isCompleted')) {
+      query = query..where((tbl) => tbl.isCompleted.equals(criteria['isCompleted']));
+    }
+    
+    final results = await query.get();
+    return results.map(_convertToTask).toList();
+  }
+
+  @override
+  Stream<List<Task>> watchAllEntities() {
+    return _appDatabase.select(_appDatabase.tasks).watch()
+        .map((rows) => rows.map(_convertToTask).toList());
+  }
+
+  @override
+  Stream<List<Task>> watchEntitiesWhere(Map<String, dynamic> criteria) {
+    var query = _appDatabase.select(_appDatabase.tasks);
+    
+    if (criteria.containsKey('isCompleted')) {
+      query = query..where((tbl) => tbl.isCompleted.equals(criteria['isCompleted']));
+    }
+    
+    return query.watch().map((rows) => rows.map(_convertToTask).toList());
+  }
+
+  Task _convertToTask(TaskData data) {
+    return Task(
+      id: data.id,
+      title: data.title,
+      description: data.description,
+      isCompleted: data.isCompleted,
+      createdAt: data.createdAt,
+    );
+  }
+}
+```
+
+### Step 4: Set Up BLoC
+
+Create `lib/blocs/task/task_bloc.dart`:
+
+```dart
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:equatable/equatable.dart';
+import 'package:uuid/uuid.dart';
+import '../../models/task.dart';
+import '../../repositories/task_repository.dart';
+
+// Events
+abstract class TaskEvent extends Equatable {
+  @override
+  List<Object?> get props => [];
+}
+
+class LoadTasks extends TaskEvent {}
+class AddTask extends TaskEvent {
+  final String title;
+  final String description;
+  AddTask({required this.title, required this.description});
+  @override
+  List<Object?> get props => [title, description];
+}
+
+class ToggleTask extends TaskEvent {
+  final String taskId;
+  ToggleTask(this.taskId);
+  @override
+  List<Object?> get props => [taskId];
+}
+
+class DeleteTask extends TaskEvent {
+  final String taskId;
+  DeleteTask(this.taskId);
+  @override
+  List<Object?> get props => [taskId];
+}
+
+// States
+abstract class TaskState extends Equatable {
+  @override
+  List<Object?> get props => [];
+}
+
+class TaskInitial extends TaskState {}
+class TaskLoading extends TaskState {}
+class TaskLoaded extends TaskState {
+  final List<Task> tasks;
+  TaskLoaded(this.tasks);
+  @override
+  List<Object?> get props => [tasks];
+}
+
+class TaskError extends TaskState {
+  final String message;
+  TaskError(this.message);
+  @override
+  List<Object?> get props => [message];
+}
+
+// BLoC
+class TaskBloc extends Bloc<TaskEvent, TaskState> {
+  final TaskRepository repository;
+  final _uuid = const Uuid();
+
+  TaskBloc({required this.repository}) : super(TaskInitial()) {
+    on<LoadTasks>(_onLoadTasks);
+    on<AddTask>(_onAddTask);
+    on<ToggleTask>(_onToggleTask);
+    on<DeleteTask>(_onDeleteTask);
+  }
+
+  Future<void> _onLoadTasks(LoadTasks event, Emitter<TaskState> emit) async {
+    emit(TaskLoading());
+    try {
+      final tasks = await repository.getAll();
+      emit(TaskLoaded(tasks));
+    } catch (e) {
+      emit(TaskError(e.toString()));
+    }
+  }
+
+  Future<void> _onAddTask(AddTask event, Emitter<TaskState> emit) async {
+    try {
+      final task = Task(
+        id: _uuid.v4(),
+        title: event.title,
+        description: event.description,
+        isCompleted: false,
+        createdAt: DateTime.now(),
+      );
+      await repository.save(task);
+      add(LoadTasks());
+    } catch (e) {
+      emit(TaskError(e.toString()));
+    }
+  }
+
+  Future<void> _onToggleTask(ToggleTask event, Emitter<TaskState> emit) async {
+    try {
+      final task = await repository.getById(event.taskId);
+      if (task != null) {
+        final updatedTask = task.copyWith(isCompleted: !task.isCompleted);
+        await repository.save(updatedTask);
+        add(LoadTasks());
+      }
+    } catch (e) {
+      emit(TaskError(e.toString()));
+    }
+  }
+
+  Future<void> _onDeleteTask(DeleteTask event, Emitter<TaskState> emit) async {
+    try {
+      await repository.delete(event.taskId);
+      add(LoadTasks());
+    } catch (e) {
+      emit(TaskError(e.toString()));
+    }
+  }
+}
+```
+
+### Step 5: Initialize Services
+
+Create `lib/services/app_services.dart`:
+
+```dart
+import 'package:dio/dio.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
+import '../database/app_database.dart';
+import '../repositories/task_repository.dart';
+
+class AppServices {
+  static late AppDatabase database;
+  static late ConnectivityService connectivityService;
+  static late SyncManager syncManager;
+  static late TaskRepository taskRepository;
+
+  static Future<void> initialize() async {
+    // Initialize database
+    database = AppDatabase();
+
+    // Initialize connectivity service
     connectivityService = ConnectivityServiceImpl();
     await connectivityService.initialize();
 
+    // Initialize sync manager
     syncManager = SyncManagerImpl(
       database: database,
       connectivityService: connectivityService,
-      dio: Dio(BaseOptions(baseUrl: 'https://your-api.com')),
+      dio: Dio(BaseOptions(
+        baseUrl: 'https://your-api.com', // Replace with your API URL
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      )),
     );
     await syncManager.initialize();
 
-    repository = GoodCatchRepository(
+    // Initialize repositories
+    taskRepository = TaskRepository(
       database: database,
       syncManager: syncManager,
     );
@@ -208,497 +489,410 @@ class _OfflineFirstProviderState extends State<OfflineFirstProvider> {
     await syncManager.startAutoSync();
   }
 
+  static Future<void> dispose() async {
+    await syncManager.dispose();
+    await connectivityService.dispose();
+    await database.close();
+  }
+}
+```
+
+### Step 6: Set Up Main App
+
+Update your `lib/main.dart`:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
+import 'services/app_services.dart';
+import 'blocs/task/task_bloc.dart';
+import 'screens/task_list_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize services
+  await AppServices.initialize();
+  
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MultiRepositoryProvider(
-      providers: [
-        RepositoryProvider<GoodCatchRepository>.value(value: repository),
-      ],
-      child: MultiBlocProvider(
+    return MaterialApp(
+      title: 'Offline Tasks',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
+      home: MultiBlocProvider(
         providers: [
           BlocProvider(
             create: (context) => SyncBloc(
-              syncManager: syncManager,
-              connectivityService: connectivityService,
+              syncManager: AppServices.syncManager,
+              connectivityService: AppServices.connectivityService,
             )..add(const SyncInitialize()),
           ),
           BlocProvider(
-            create: (context) => GoodCatchBloc(repository)
-              ..add(LoadGoodCatchs()),
+            create: (context) => TaskBloc(repository: AppServices.taskRepository)
+              ..add(LoadTasks()),
           ),
         ],
-        child: widget.child,
+        child: const TaskListScreen(),
       ),
     );
   }
 }
 ```
 
-### 4. Use in Your UI
+### Step 7: Create UI
 
-Display sync status and manage offline data:
+Create `lib/screens/task_list_screen.dart`:
 
 ```dart
-class HomePage extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
+import '../blocs/task/task_bloc.dart';
+
+class TaskListScreen extends StatelessWidget {
+  const TaskListScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Good Catches'),
-        actions: [
-          const SyncStatusIndicator(showText: true),
+        title: const Text('My Tasks'),
+        actions: const [
+          SyncStatusIndicator(showText: true),
+          SizedBox(width: 16),
         ],
       ),
       body: Column(
         children: [
-          // Show offline banner when not connected
+          // Show offline banner when disconnected
           const OfflineBanner(),
           
           // Show sync progress
           const SyncProgressCard(),
           
-          // Your main content
+          // Task list
           Expanded(
-            child: BlocBuilder<GoodCatchBloc, GoodCatchState>(
+            child: BlocBuilder<TaskBloc, TaskState>(
               builder: (context, state) {
-                if (state is GoodCatchLoaded) {
+                if (state is TaskLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (state is TaskLoaded) {
+                  if (state.tasks.isEmpty) {
+                    return const Center(
+                      child: Text('No tasks yet. Add one below!'),
+                    );
+                  }
                   return ListView.builder(
-                    itemCount: state.entities.length,
+                    itemCount: state.tasks.length,
                     itemBuilder: (context, index) {
-                      final item = state.entities[index];
+                      final task = state.tasks[index];
                       return ListTile(
-                        title: Text(item.title),
-                        subtitle: Text(item.description),
-                        trailing: StreamBuilder<UploadStatus?>(
-                          stream: repository.watchUploadStatus(item.id),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData) {
-                              return ItemSyncStatus(
-                                status: snapshot.data!,
-                                compact: true,
-                              );
-                            }
-                            return const SizedBox.shrink();
+                        title: Text(
+                          task.title,
+                          style: TextStyle(
+                            decoration: task.isCompleted 
+                                ? TextDecoration.lineThrough 
+                                : null,
+                          ),
+                        ),
+                        subtitle: Text(task.description),
+                        leading: Checkbox(
+                          value: task.isCompleted,
+                          onChanged: (_) {
+                            context.read<TaskBloc>().add(ToggleTask(task.id));
+                          },
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            context.read<TaskBloc>().add(DeleteTask(task.id));
                           },
                         ),
                       );
                     },
                   );
+                } else if (state is TaskError) {
+                  return Center(child: Text('Error: ${state.message}'));
                 }
-                return const CircularProgressIndicator();
+                return const SizedBox.shrink();
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: const SyncFab(),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: "add",
+            onPressed: () => _showAddTaskDialog(context),
+            child: const Icon(Icons.add),
+          ),
+          const SizedBox(height: 8),
+          const SyncFab(),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTaskDialog(BuildContext context) {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add Task'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: descriptionController,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty) {
+                context.read<TaskBloc>().add(AddTask(
+                  title: titleController.text,
+                  description: descriptionController.text,
+                ));
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 }
 ```
 
-## 🏗️ Architecture
+### Step 8: Run Code Generation
 
-### Clean Architecture Layers
-
-```
-┌─────────────────────────────────────┐
-│             UI Layer                │
-│  ┌─────────────┐ ┌─────────────┐   │
-│  │   Widgets   │ │    BLoCs    │   │
-│  └─────────────┘ └─────────────┘   │
-└─────────────────────────────────────┘
-           │
-┌─────────────────────────────────────┐
-│           Domain Layer              │
-│  ┌─────────────┐ ┌─────────────┐   │
-│  │ Interfaces  │ │   Models    │   │
-│  └─────────────┘ └─────────────┘   │
-└─────────────────────────────────────┘
-           │
-┌─────────────────────────────────────┐
-│            Data Layer               │
-│  ┌─────────────┐ ┌─────────────┐   │
-│  │Repositories │ │  Database   │   │
-│  └─────────────┘ └─────────────┘   │
-└─────────────────────────────────────┘
+```bash
+dart run build_runner build --delete-conflicting-outputs
 ```
 
-### Core Components
+### Step 9: Test Your App
 
-- **OfflineRepository**: Abstract interface for data access
-- **SyncManager**: Handles sync operations and queuing
-- **ConnectivityService**: Monitors network status
-- **SyncDatabase**: Drift-based local storage
-- **SyncBloc**: State management for sync operations
+```bash
+flutter run
+```
 
-## 🎯 Advanced Usage
+## 🎉 Congratulations!
 
-### Custom Sync Handlers
+You now have a fully functional offline-first task app! The app will:
 
-Implement custom sync logic for specific entity types:
+- ✅ Work completely offline
+- ✅ Store data locally using Drift
+- ✅ Automatically sync when internet is available
+- ✅ Show sync status in the UI
+- ✅ Handle connectivity changes gracefully
+
+## 📚 Next Steps
+
+### Add File Sync
+
+For apps that need to sync files (images, documents):
 
 ```dart
-class GoodCatchSyncHandler implements SyncHandler {
+@OfflineEntity(
+  tableName: 'reports',
+  endpoint: '/api/reports',
+  syncFields: ['images', 'documents'], // Mark file fields
+)
+class Report {
+  @SyncField(type: SyncFieldType.fileList)
+  final List<String> images;
+  
+  @SyncField(type: SyncFieldType.file)
+  final String? documentPath;
+  
+  // ... other fields
+}
+```
+
+### Custom Sync Logic
+
+```dart
+class CustomSyncHandler implements SyncHandler {
   @override
   Future<SyncResult> sync(SyncItem item) async {
+    // Your custom sync logic here
     try {
-      final goodCatch = GoodCatch.fromJson(item.data);
+      // Upload files first
+      await uploadFiles(item.data);
       
-      // Upload images first
-      final uploadedImageUrls = <String>[];
-      for (final imagePath in goodCatch.images) {
-        final imageUrl = await _uploadImage(imagePath);
-        uploadedImageUrls.add(imageUrl);
-      }
+      // Then sync the main data
+      final response = await api.post('/custom-endpoint', data: item.data);
       
-      // Update the good catch with uploaded image URLs
-      final updatedData = goodCatch.copyWith(
-        images: uploadedImageUrls,
-      ).toJson();
-      
-      // Send to server
-      final response = await dio.post(
-        item.endpoint ?? '/api/good-catches',
-        data: updatedData,
-      );
-      
-      return response.statusCode == 200
-          ? SyncResult.success(responseData: response.data)
-          : SyncResult.failure('HTTP ${response.statusCode}');
+      return SyncResult.success(responseData: response.data);
     } catch (e) {
       return SyncResult.failure(e.toString());
     }
   }
 }
 
-// Register the handler
-syncManager.registerSyncHandler('GoodCatch', GoodCatchSyncHandler());
+// Register the custom handler
+syncManager.registerSyncHandler('Report', CustomSyncHandler());
 ```
 
 ### Background Sync
 
-Set up background synchronization:
+For syncing when app is in background:
 
 ```dart
-class BackgroundSyncService {
-  static Future<void> initialize() async {
-    Workmanager().initialize(callbackDispatcher);
-    
-    Workmanager().registerPeriodicTask(
-      'sync-task',
-      'syncOfflineData',
-      frequency: const Duration(hours: 1),
-    );
-  }
-}
+// Add to pubspec.yaml
+// workmanager: ^0.5.1
+
+// Initialize background tasks
+await Workmanager().initialize(callbackDispatcher);
+await Workmanager().registerPeriodicTask(
+  'sync-task',
+  'syncData',
+  frequency: const Duration(hours: 1),
+);
 
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    final syncManager = await SyncManager.getInstance();
-    await syncManager.syncNow();
+    // Initialize your sync manager and run sync
+    await AppServices.initialize();
+    await AppServices.syncManager.syncNow();
     return Future.value(true);
   });
 }
 ```
 
-### Sync Strategies
+## 🛠️ Configuration
 
-Configure different sync approaches:
-
-```dart
-// Immediate sync (default)
-syncManager.setSyncStrategy(SyncStrategy.immediate);
-
-// Batched sync for efficiency
-syncManager.setSyncStrategy(SyncStrategy.batched);
-
-// Scheduled sync
-syncManager.setSyncStrategy(SyncStrategy.scheduled);
-```
-
-### Code Generation
-
-Run these commands for code generation:
-
-```bash
-# Generate all code
-dart run build_runner build
-
-# Watch for changes during development
-dart run build_runner watch
-
-# Clean and rebuild
-dart run build_runner clean
-dart run build_runner build --delete-conflicting-outputs
-```
-
-## 📚 API Reference
-
-### Core Interfaces
-
-#### OfflineRepository<T>
-```dart
-abstract class OfflineRepository<T> {
-  Future<List<T>> getAll();
-  Future<T?> getById(String id);
-  Future<T> save(T entity);
-  Future<void> delete(String id);
-  Future<List<T>> getPendingSync();
-  Stream<List<T>> watchAll();
-  // ... more methods
-}
-```
-
-#### SyncManager
-```dart
-abstract class SyncManager {
-  Future<void> initialize();
-  Future<void> queueForSync(SyncItem item);
-  Future<void> startAutoSync();
-  Future<void> syncNow();
-  Stream<SyncStatus> watchSyncStatus();
-  // ... more methods
-}
-```
-
-### Models
-
-#### SyncItem
-Represents an item in the sync queue with priority, dependencies, and retry logic.
-
-#### UploadStatus
-Tracks upload progress and status (pending, uploading, completed, failed).
-
-#### SyncResult
-Result of a sync operation with success/failure and response data.
-
-### Widgets
-
-#### SyncStatusIndicator
-Shows current sync status with icon and optional text.
-
-#### SyncProgressCard
-Displays detailed sync progress with statistics and controls.
-
-#### ItemSyncStatus
-Shows sync status for individual items (compact or detailed view).
-
-#### OfflineBanner
-Alerts users when the app is offline with retry option.
-
-#### SyncFab
-Floating action button for manual sync with progress indicator.
-
-### Annotations
-
-#### @OfflineEntity
-```dart
-@OfflineEntity(
-  tableName: 'table_name',
-  endpoint: '/api/endpoint',
-  syncFields: ['field1', 'field2'],
-  syncPriority: SyncPriority.high,
-)
-```
-
-#### @SyncField
-```dart
-@SyncField(
-  type: SyncFieldType.fileList,
-  compress: true,
-  priority: SyncFieldPriority.high,
-)
-```
-
-## 🔧 Configuration
-
-### Database Configuration
-
-Configure Drift in `build.yaml`:
-
-```yaml
-targets:
-  $default:
-    builders:
-      drift_dev:
-        options:
-          compact_query_methods: true
-          use_data_class_name_for_companions: true
-          case_from_dart_to_sql: snake_case
-```
-
-### Network Configuration
-
-Setup Dio with interceptors:
+### Database Migration
 
 ```dart
-final dio = Dio(BaseOptions(
-  baseUrl: 'https://your-api.com',
-  connectTimeout: const Duration(seconds: 10),
-));
-
-// Add authentication
-dio.interceptors.add(AuthInterceptor());
-
-// Add logging
-dio.interceptors.add(LogInterceptor(
-  requestBody: true,
-  responseBody: true,
-));
+@override
+MigrationStrategy get migration => MigrationStrategy(
+  onCreate: (Migrator m) async {
+    await m.createAll();
+  },
+  onUpgrade: (migrator, from, to) async {
+    if (from < 2) {
+      await migrator.addColumn(tasks, tasks.priority);
+    }
+  },
+);
 ```
 
-### Sync Configuration
-
-Customize sync behavior:
+### Custom Retry Policy
 
 ```dart
+final customRetryPolicy = SmartRetryPolicy(
+  maxRetries: 5,
+  baseDelay: const Duration(seconds: 2),
+  maxDelay: const Duration(minutes: 10),
+);
+
 final syncManager = SyncManagerImpl(
   database: database,
   connectivityService: connectivityService,
   dio: dio,
-  retryPolicy: ExponentialBackoffRetryPolicy(
-    maxRetries: 5,
-    baseDelay: Duration(seconds: 2),
-  ),
+  retryPolicy: customRetryPolicy,
 );
 ```
 
-## 💡 Best Practices
+### Authentication
 
-### 1. Entity Design
-- Keep entities simple and focused
-- Use immutable data structures
-- Implement proper `copyWith` methods
-- Add comprehensive `props` for Equatable
-
-### 2. Sync Fields
-- Only mark fields that truly need special handling
-- Use appropriate `SyncFieldType` for data
-- Consider compression for large data
-- Set proper priorities
-
-### 3. Error Handling
-- Implement proper error handling in repositories
-- Use typed exceptions for different error scenarios
-- Provide meaningful error messages to users
-- Log errors for debugging
-
-### 4. Performance
-- Use pagination for large datasets
-- Implement proper indexing in database tables
-- Batch operations when possible
-- Monitor sync queue size
-
-### 5. Testing
 ```dart
-// Test your repositories
-testWidgets('should save entity offline', (tester) async {
-  final repository = MockGoodCatchRepository();
-  final entity = GoodCatch(...);
-  
-  await repository.save(entity);
-  
-  verify(repository.save(entity)).called(1);
-  expect(await repository.getById(entity.id), equals(entity));
-});
+class AuthInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.headers['Authorization'] = 'Bearer ${getToken()}';
+    handler.next(options);
+  }
+}
 
-// Test sync operations
-test('should sync pending items', () async {
-  final syncManager = MockSyncManager();
-  
-  await syncManager.syncNow();
-  
-  verify(syncManager.syncNow()).called(1);
-});
+final dio = Dio()..interceptors.add(AuthInterceptor());
 ```
 
-## 🚫 Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Build Runner Issues**
+**1. Build Runner Issues**
 ```bash
-# Clean and rebuild
-dart run build_runner clean
-dart run build_runner build --delete-conflicting-outputs
-
-# If still having issues
 flutter clean
 flutter pub get
-dart run build_runner build
+dart run build_runner clean
+dart run build_runner build --delete-conflicting-outputs
 ```
 
-**Database Migration Issues**
+**2. Sync Not Working**
+- Check your API endpoint URLs
+- Verify internet connectivity
+- Check authentication headers
+- Look at sync error logs in the UI
+
+**3. Database Issues**
 ```dart
-@override
-MigrationStrategy get migration {
-  return MigrationStrategy(
-    onUpgrade: (migrator, from, to) async {
-      if (from < 2) {
-        // Add your migration logic
-        await migrator.addColumn(goodCatches, goodCatches.newColumn);
-      }
-    },
-  );
+// Reset database during development
+await database.close();
+final dbFile = File(p.join(dbFolder.path, 'app_database.db'));
+if (await dbFile.exists()) {
+  await dbFile.delete();
 }
 ```
 
-**Sync Issues**
-- Check network connectivity
-- Verify API endpoints are correct
-- Review error logs in sync status
-- Ensure proper authentication headers
+**4. Performance Issues**
+- Use pagination for large datasets
+- Implement proper database indexes
+- Monitor sync queue size
 
-**Performance Issues**
-- Implement pagination for large datasets
-- Use proper database indexes
-- Avoid frequent sync operations
-- Monitor memory usage
+### Enable Debug Logging
+
+```dart
+// Add to main.dart for development
+if (kDebugMode) {
+  dio.interceptors.add(LogInterceptor(
+    requestBody: true,
+    responseBody: true,
+  ));
+}
+```
 
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-### Development Setup
-
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/ColtonDevAcc/offline_first.git`
-3. Install dependencies: `flutter pub get`
-4. Run tests: `flutter test`
-5. Create a feature branch: `git checkout -b feature/amazing-feature`
-6. Make your changes and add tests
-7. Ensure tests pass: `flutter test`
-8. Commit your changes: `git commit -m 'Add amazing feature'`
-9. Push to your branch: `git push origin feature/amazing-feature`
-10. Open a Pull Request
-
-### Code Standards
-
-- Follow [Effective Dart](https://dart.dev/guides/language/effective-dart) guidelines
-- Write tests for new features
-- Document public APIs
-- Use meaningful commit messages
-- Keep PRs focused and small
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
-
-- [Drift](https://drift.simonbinder.eu/) for excellent database support
-- [BLoC](https://bloclibrary.dev/) for state management
-- [Connectivity Plus](https://pub.dev/packages/connectivity_plus) for connectivity monitoring
-- [Dio](https://pub.dev/packages/dio) for HTTP client
-
 ## 📞 Support
 
 - 📧 Email: support@voostack.com
-- 🐛 Issues: [GitHub Issues](https://github.com/voostack/offline_first/issues)
-- 📖 Documentation: [Full Documentation](https://docs.voostack.com/offline_first)
-- 💬 Discussions: [GitHub Discussions](https://github.com/voostack/offline_first/discussions)
+- 🐛 Issues: [GitHub Issues](https://github.com/voostack/voo_offline_first/issues)
+- 📖 Documentation: [Full Documentation](https://docs.voostack.com/voo_offline_first)
+- 💬 Discussions: [GitHub Discussions](https://github.com/voostack/voo_offline_first/discussions)
 
 ---
 
-Made with ❤️ by [Your Company](https://voostack.com)
+Made with ❤️ by [VooStack](https://voostack.com)

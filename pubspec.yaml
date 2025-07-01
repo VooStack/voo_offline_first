@@ -1,7 +1,7 @@
 name: voo_offline_first
 description: A Flutter package for offline-first functionality with clean architecture and automatic sync capabilities
 version: 1.0.0
-homepage: https://github.com/yourcompany/offline_first
+homepage: https://github.com/VooStack/voo_offline_first
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
