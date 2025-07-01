@@ -24,6 +24,7 @@ targets:
         generate_for:
           include:
             - lib/src/database/sync_database.dart
+            - lib/src/database/tables.dart
           exclude:
             - lib/src/annotations/*.dart
             - lib/src/core/models/*.dart

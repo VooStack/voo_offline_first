@@ -8,7 +8,6 @@ import '../core/interfaces/sync_manager.dart';
 import '../core/models/sync_item.dart';
 import '../core/models/upload_status.dart';
 import '../database/sync_database.dart';
-import '../database/tables.dart';
 import '../annotations/offline_entity.dart';
 import '../core/exceptions/offline_exceptions.dart';
 
@@ -45,8 +44,8 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   /// Set the ID of an entity (used when creating new entities)
   T setId(T entity, String id);
 
-  /// Get the table for this entity type (your Drift table)
-  TableInfo get table;
+  /// Get the table name for this entity type
+  String get tableName;
 
   /// Insert entity into the specific table
   Future<void> insertEntity(T entity);
@@ -121,14 +120,14 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   Future<T> save(T entity) async {
     try {
       final id = getId(entity);
-      final isNew = id.isEmpty;
+      final entityIsNew = id.isEmpty;
 
-      final entityWithId = isNew ? setId(entity, _uuid.v4()) : entity;
+      final entityWithId = entityIsNew ? setId(entity, _uuid.v4()) : entity;
       final finalId = getId(entityWithId);
 
       // Start transaction for consistency
       return await database.transaction(() async {
-        if (isNew) {
+        if (entityIsNew) {
           await insertEntity(entityWithId);
           await _createEntityMetadata(finalId, isNew: true);
         } else {
@@ -145,10 +144,12 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
       });
     } catch (e) {
       if (e is ValidationException || e is SerializationException) rethrow;
+      final id = getId(entity);
+      final entityIsNew = id.isEmpty;
       throw DatabaseException(
         'Failed to save entity: $e',
         tableName: offlineEntity.tableName,
-        operation: isNew ? 'insert' : 'update',
+        operation: entityIsNew ? 'insert' : 'update',
       );
     }
   }
@@ -218,11 +219,13 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Future<List<T>> getPendingSync() async {
     try {
-      // Get entities that need sync from metadata
-      final metadataQuery = database.select(database.entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType) & tbl.needsSync.equals(true));
+      // Get entities that need sync from metadata using custom SQL
+      final metadataResults = await database.customSelect(
+        'SELECT entity_id FROM entity_metadata WHERE entity_type = ? AND needs_sync = 1',
+        variables: [Variable.withString(entityType)],
+      ).get();
 
-      final metadataResults = await metadataQuery.get();
-      final entityIds = metadataResults.map((m) => m.entityId).toList();
+      final entityIds = metadataResults.map((m) => m.data['entity_id'] as String).toList();
 
       if (entityIds.isEmpty) return [];
 
@@ -262,11 +265,16 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Future<void> updateUploadStatus(String id, UploadStatus status) async {
     try {
-      // Store upload status in entity metadata as JSON
-      await (database.update(database.entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType) & tbl.entityId.equals(id))).write(EntityMetadataCompanion(
-        syncStatus: Value(jsonEncode(status.toJson())),
-        updatedAt: Value(DateTime.now()),
-      ));
+      // Store upload status in entity metadata as JSON using custom SQL
+      await database.customUpdate(
+        'UPDATE entity_metadata SET sync_status = ?, updated_at = ? WHERE entity_type = ? AND entity_id = ?',
+        variables: [
+          Variable.withString(jsonEncode(status.toJson())),
+          Variable.withDateTime(DateTime.now()),
+          Variable.withString(entityType),
+          Variable.withString(id),
+        ],
+      );
     } catch (e) {
       throw DatabaseException(
         'Failed to update upload status: $e',
@@ -350,10 +358,15 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Stream<List<SyncItem>> watchPendingSync() {
     try {
-      return database
-          .select(database.syncItems)
-          .watch()
-          .map((items) => items.where((item) => item.entityType == entityType).map(_convertToSyncItem).where((item) => item.status.isPending).toList());
+      // Use polling instead of real-time watching
+      return Stream.periodic(const Duration(seconds: 2)).asyncMap((_) async {
+        final results = await database.customSelect(
+          'SELECT * FROM sync_items WHERE entity_type = ? AND status LIKE \'%"state":"pending"%\'',
+          variables: [Variable.withString(entityType)],
+        ).get();
+
+        return results.map((row) => _convertRowToSyncItem(row.data)).where((item) => item.status.isPending).toList();
+      });
     } catch (e) {
       return Stream.error(SyncException(
         'Failed to watch pending sync items: $e',
@@ -365,22 +378,21 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Stream<UploadStatus?> watchUploadStatus(String id) {
     try {
-      return database.select(database.entityMetadataTable).watch().map((metadata) {
-        final entityMetadata = metadata.firstWhere(
-          (m) => m.entityType == entityType && m.entityId == id,
-          orElse: () => throw StateError('Entity metadata not found'),
-        );
+      return Stream.periodic(const Duration(seconds: 2)).asyncMap((_) async {
+        final result = await database.customSelect(
+          'SELECT sync_status FROM entity_metadata WHERE entity_type = ? AND entity_id = ?',
+          variables: [Variable.withString(entityType), Variable.withString(id)],
+        ).getSingleOrNull();
+
+        if (result == null) return null;
 
         try {
-          final statusJson = jsonDecode(entityMetadata.syncStatus) as Map<String, dynamic>;
+          final statusJson = jsonDecode(result.data['sync_status'] as String) as Map<String, dynamic>;
           return UploadStatus.fromJson(statusJson);
         } catch (e) {
           return const UploadStatus(state: UploadState.pending);
         }
-      }).handleError((e) {
-        // Return null if entity not found or other error
-        return null;
-      });
+      }).handleError((e) => null);
     } catch (e) {
       return Stream.error(DatabaseException(
         'Failed to watch upload status: $e',
@@ -393,9 +405,8 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Future<int> count() async {
     try {
-      final query = database.selectOnly(table)..addColumns([table.allColumns.first.count()]);
-      final result = await query.getSingle();
-      return result.read(table.allColumns.first.count()) ?? 0;
+      final result = await database.customSelect('SELECT COUNT(*) as count FROM ${offlineEntity.tableName}').getSingle();
+      return result.data['count'] as int? ?? 0;
     } catch (e) {
       throw DatabaseException(
         'Failed to count entities: $e',
@@ -424,13 +435,19 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
     try {
       await database.transaction(() async {
         // Clear entity data
-        await database.delete(table).go();
+        await database.customStatement('DELETE FROM ${offlineEntity.tableName}');
 
         // Clear metadata
-        await (database.delete(database.entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType))).go();
+        await database.customUpdate(
+          'DELETE FROM entity_metadata WHERE entity_type = ?',
+          variables: [Variable.withString(entityType)],
+        );
 
         // Clear sync items
-        await (database.delete(database.syncItems)..where((tbl) => tbl.entityType.equals(entityType))).go();
+        await database.customUpdate(
+          'DELETE FROM sync_items WHERE entity_type = ?',
+          variables: [Variable.withString(entityType)],
+        );
       });
     } catch (e) {
       throw DatabaseException(
@@ -445,20 +462,22 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
 
   Future<void> _createEntityMetadata(String entityId, {required bool isNew}) async {
     try {
-      final companion = EntityMetadataCompanion.insert(
-        id: '${entityType}_$entityId',
-        entityType: entityType,
-        entityId: entityId,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        needsSync: isNew && offlineEntity.autoSync,
-        syncStatus: const Value('{"state":"pending"}'),
+      await database.customInsert(
+        '''
+        INSERT OR REPLACE INTO entity_metadata 
+        (id, entity_type, entity_id, created_at, updated_at, needs_sync, sync_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''',
+        variables: [
+          Variable.withString('${entityType}_$entityId'),
+          Variable.withString(entityType),
+          Variable.withString(entityId),
+          Variable.withDateTime(DateTime.now()),
+          Variable.withDateTime(DateTime.now()),
+          Variable.withBool(isNew && offlineEntity.autoSync),
+          Variable.withString('{"state":"pending"}'),
+        ],
       );
-
-      await database.into(database.entityMetadataTable).insert(
-            companion,
-            mode: InsertMode.insertOrReplace,
-          );
     } catch (e) {
       throw DatabaseException(
         'Failed to create entity metadata: $e',
@@ -474,11 +493,31 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
     bool? needsSync,
   }) async {
     try {
-      await (database.update(database.entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType) & tbl.entityId.equals(entityId))).write(EntityMetadataCompanion(
-        updatedAt: Value(DateTime.now()),
-        lastSyncedAt: lastSyncedAt != null ? Value(lastSyncedAt) : const Value.absent(),
-        needsSync: needsSync != null ? Value(needsSync) : const Value.absent(),
-      ));
+      final updates = <String>[];
+      final variables = <Variable>[];
+
+      updates.add('updated_at = ?');
+      variables.add(Variable.withDateTime(DateTime.now()));
+
+      if (lastSyncedAt != null) {
+        updates.add('last_synced_at = ?');
+        variables.add(Variable.withDateTime(lastSyncedAt));
+      }
+
+      if (needsSync != null) {
+        updates.add('needs_sync = ?');
+        variables.add(Variable.withBool(needsSync));
+      }
+
+      variables.addAll([
+        Variable.withString(entityType),
+        Variable.withString(entityId),
+      ]);
+
+      await database.customUpdate(
+        'UPDATE entity_metadata SET ${updates.join(', ')} WHERE entity_type = ? AND entity_id = ?',
+        variables: variables,
+      );
     } catch (e) {
       throw DatabaseException(
         'Failed to update entity metadata: $e',
@@ -490,7 +529,10 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
 
   Future<void> _deleteEntityMetadata(String entityId) async {
     try {
-      await (database.delete(database.entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType) & tbl.entityId.equals(entityId))).go();
+      await database.customUpdate(
+        'DELETE FROM entity_metadata WHERE entity_type = ? AND entity_id = ?',
+        variables: [Variable.withString(entityType), Variable.withString(entityId)],
+      );
     } catch (e) {
       throw DatabaseException(
         'Failed to delete entity metadata: $e',
@@ -500,24 +542,24 @@ abstract class BaseOfflineRepository<T> implements OfflineRepository<T> {
     }
   }
 
-  SyncItem _convertToSyncItem(SyncItemData data) {
+  SyncItem _convertRowToSyncItem(Map<String, dynamic> data) {
     try {
-      final statusJson = jsonDecode(data.status) as Map<String, dynamic>;
-      final dependencies = jsonDecode(data.dependencies) as List<dynamic>;
+      final statusJson = jsonDecode(data['status'] as String) as Map<String, dynamic>;
+      final dependencies = jsonDecode(data['dependencies'] as String) as List<dynamic>;
 
       return SyncItem(
-        id: data.id,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        data: jsonDecode(data.data) as Map<String, dynamic>,
-        createdAt: data.createdAt,
+        id: data['id'] as String,
+        entityType: data['entity_type'] as String,
+        entityId: data['entity_id'] as String,
+        data: jsonDecode(data['data'] as String) as Map<String, dynamic>,
+        createdAt: DateTime.parse(data['created_at'] as String),
         status: UploadStatus.fromJson(statusJson),
         priority: SyncPriority.values.firstWhere(
-          (p) => p.value == data.priority,
+          (p) => p.value == data['priority'] as int,
           orElse: () => SyncPriority.normal,
         ),
-        endpoint: data.endpoint,
-        lastAttemptAt: data.lastAttemptAt,
+        endpoint: data['endpoint'] as String?,
+        lastAttemptAt: data['last_attempt_at'] != null ? DateTime.parse(data['last_attempt_at'] as String) : null,
         dependencies: dependencies.cast<String>(),
       );
     } catch (e) {

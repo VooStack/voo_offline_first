@@ -82,7 +82,7 @@ class SyncManagerImpl implements SyncManager {
         );
       }
 
-      // Insert into sync queue using raw SQL
+      // Insert into sync queue using custom SQL without relying on table getters
       await database.customInsert(
         '''
         INSERT OR REPLACE INTO sync_items 
@@ -101,7 +101,6 @@ class SyncManagerImpl implements SyncManager {
           Variable(item.lastAttemptAt),
           Variable.withString(jsonEncode(item.dependencies)),
         ],
-        updates: {database.syncItems},
       );
 
       // Notify watchers
@@ -278,7 +277,6 @@ class SyncManagerImpl implements SyncManager {
       await database.customUpdate(
         'DELETE FROM sync_items WHERE status LIKE ?',
         variables: [Variable.withString('%"state":"completed"%')],
-        updates: {database.syncItems},
       );
 
       final currentQueue = await getSyncQueue();
@@ -370,7 +368,7 @@ class SyncManagerImpl implements SyncManager {
   Stream<List<SyncItem>> watchSyncQueue() {
     _ensureInitialized();
 
-    // Simple polling approach
+    // Simple polling approach using custom SQL
     return Stream.periodic(const Duration(seconds: 2), (_) => null).asyncMap((_) async => await getSyncQueue()).distinct();
   }
 
@@ -608,7 +606,6 @@ class SyncManagerImpl implements SyncManager {
           Variable.withDateTime(DateTime.now()),
           Variable.withString(syncItemId),
         ],
-        updates: {database.syncItems},
       );
 
       await _updateQueueStream();

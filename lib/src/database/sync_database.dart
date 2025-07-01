@@ -3,7 +3,6 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'tables.dart';
@@ -32,7 +31,7 @@ class SyncDatabase extends _$SyncDatabase {
         await _insertDefaultConfigs();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        if (from < 2) {}
+        // Add migration logic here for future schema changes
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -43,155 +42,174 @@ class SyncDatabase extends _$SyncDatabase {
 
   Future<void> _insertDefaultConfigs() async {
     try {
-      await into(syncConfigs).insert(
-        SyncConfigsCompanion.insert(
-          entityType: 'default',
-          endpoint: const Value(null),
-          autoSync: const Value(true),
-          maxRetries: const Value(3),
-          retryDelaySeconds: const Value(300),
-          batchSize: const Value(10),
-          syncFields: '[]',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-        mode: InsertMode.insertOrIgnore,
+      // Use a simple insert statement to avoid getter issues
+      await customInsert(
+        '''
+        INSERT OR IGNORE INTO sync_configs 
+        (entity_type, endpoint, auto_sync, max_retries, retry_delay_seconds, batch_size, sync_fields, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        variables: [
+          Variable.withString('default'),
+          const Variable(null),
+          Variable.withBool(true),
+          Variable.withInt(3),
+          Variable.withInt(300),
+          Variable.withInt(10),
+          Variable.withString('[]'),
+          Variable.withDateTime(DateTime.now()),
+          Variable.withDateTime(DateTime.now()),
+        ],
       );
     } catch (e) {
       debugPrint('Warning: Failed to insert default configs: $e');
     }
   }
 
-  Future<SyncConfigData?> getSyncConfig(String entityType) async {
-    final query = select(syncConfigs)..where((tbl) => tbl.entityType.equals(entityType));
+  // Basic CRUD operations using custom SQL to avoid getter issues
 
-    final result = await query.getSingleOrNull();
+  Future<List<Map<String, dynamic>>> getPendingSyncItems() async {
+    final results = await customSelect(
+      '''
+      SELECT * FROM sync_items 
+      WHERE status LIKE '%"state":"pending"%' 
+      ORDER BY priority DESC, created_at ASC
+      ''',
+    ).get();
 
-    if (result == null) {
-      final defaultQuery = select(syncConfigs)..where((tbl) => tbl.entityType.equals('default'));
-      return await defaultQuery.getSingleOrNull();
-    }
-
-    return result;
+    return results.map((row) => row.data).toList();
   }
 
-  Future<void> updateSyncConfig(SyncConfigData config) async {
-    await into(syncConfigs).insert(
-      config.toCompanion(true),
-      mode: InsertMode.insertOrReplace,
-    );
+  Future<List<Map<String, dynamic>>> getSyncItemsByEntityType(String entityType) async {
+    final results = await customSelect(
+      '''
+      SELECT * FROM sync_items 
+      WHERE entity_type = ? 
+      ORDER BY priority DESC, created_at ASC
+      ''',
+      variables: [Variable.withString(entityType)],
+    ).get();
+
+    return results.map((row) => row.data).toList();
   }
 
-  Future<List<SyncItemData>> getPendingSyncItems() async {
-    final query = select(syncItems)
-      ..where((tbl) => tbl.status.contains('"state":"pending"'))
-      ..orderBy([
-        (tbl) => OrderingTerm.desc(tbl.priority),
-        (tbl) => OrderingTerm.asc(tbl.createdAt),
-      ]);
-
-    return await query.get();
-  }
-
-  Future<List<SyncItemData>> getSyncItemsByEntityType(String entityType) async {
-    final query = select(syncItems)
-      ..where((tbl) => tbl.entityType.equals(entityType))
-      ..orderBy([
-        (tbl) => OrderingTerm.desc(tbl.priority),
-        (tbl) => OrderingTerm.asc(tbl.createdAt),
-      ]);
-
-    return await query.get();
-  }
-
-  Future<List<SyncItemData>> getRetryReadySyncItems() async {
+  Future<List<Map<String, dynamic>>> getRetryReadySyncItems() async {
     final cutoffTime = DateTime.now().subtract(const Duration(minutes: 5));
-    final query = select(syncItems)..where((tbl) => tbl.status.contains('"state":"failed"') & tbl.lastAttemptAt.isSmallerThanValue(cutoffTime));
+    final results = await customSelect(
+      '''
+      SELECT * FROM sync_items 
+      WHERE status LIKE '%"state":"failed"%' 
+      AND last_attempt_at < ?
+      ''',
+      variables: [Variable.withDateTime(cutoffTime)],
+    ).get();
 
-    return await query.get();
+    return results.map((row) => row.data).toList();
   }
 
   Future<int> cleanupOldSyncItems({Duration olderThan = const Duration(days: 7)}) async {
     final cutoffDate = DateTime.now().subtract(olderThan);
 
-    final deleteQuery = delete(syncItems)..where((tbl) => tbl.status.contains('"state":"completed"') & tbl.createdAt.isSmallerThanValue(cutoffDate));
-
-    return await deleteQuery.go();
+    return await customUpdate(
+      '''
+      DELETE FROM sync_items 
+      WHERE status LIKE '%"state":"completed"%' 
+      AND created_at < ?
+      ''',
+      variables: [Variable.withDateTime(cutoffDate)],
+    );
   }
 
-  Future<EntityMetadata?> getEntityMetadata(String entityType, String entityId) async {
-    final query = select(entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType) & tbl.entityId.equals(entityId));
+  Future<Map<String, dynamic>?> getEntityMetadata(String entityType, String entityId) async {
+    final result = await customSelect(
+      'SELECT * FROM entity_metadata WHERE entity_type = ? AND entity_id = ?',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withString(entityId),
+      ],
+    ).getSingleOrNull();
 
-    return await query.getSingleOrNull();
+    return result?.data;
   }
 
-  Future<List<EntityMetadata>> getEntitiesNeedingSync(String entityType) async {
-    final query = select(entityMetadataTable)
-      ..where((tbl) => tbl.entityType.equals(entityType) & tbl.needsSync.equals(true))
-      ..orderBy([
-        (tbl) => OrderingTerm.asc(tbl.updatedAt),
-      ]);
+  Future<List<Map<String, dynamic>>> getEntitiesNeedingSync(String entityType) async {
+    final results = await customSelect(
+      '''
+      SELECT * FROM entity_metadata 
+      WHERE entity_type = ? AND needs_sync = 1 
+      ORDER BY updated_at ASC
+      ''',
+      variables: [Variable.withString(entityType)],
+    ).get();
 
-    return await query.get();
+    return results.map((row) => row.data).toList();
   }
 
-  Future<List<FileSyncData>> getFileSyncItems(String entityId, String entityType) async {
-    final query = select(fileSyncItems)..where((tbl) => tbl.entityId.equals(entityId) & tbl.entityType.equals(entityType));
+  Future<List<Map<String, dynamic>>> getFileSyncItems(String entityId, String entityType) async {
+    final results = await customSelect(
+      'SELECT * FROM file_sync_items WHERE entity_id = ? AND entity_type = ?',
+      variables: [
+        Variable.withString(entityId),
+        Variable.withString(entityType),
+      ],
+    ).get();
 
-    return await query.get();
+    return results.map((row) => row.data).toList();
   }
 
-  Future<List<FileSyncData>> getPendingFileUploads() async {
-    final query = select(fileSyncItems)
-      ..where((tbl) => tbl.uploadStatus.contains('"state":"pending"'))
-      ..orderBy([
-        (tbl) => OrderingTerm.asc(tbl.createdAt),
-      ]);
+  Future<List<Map<String, dynamic>>> getPendingFileUploads() async {
+    final results = await customSelect(
+      '''
+      SELECT * FROM file_sync_items 
+      WHERE upload_status LIKE '%"state":"pending"%' 
+      ORDER BY created_at ASC
+      ''',
+    ).get();
 
-    return await query.get();
+    return results.map((row) => row.data).toList();
   }
 
   Future<void> updateFileUploadStatus(String fileId, String status) async {
-    await (update(fileSyncItems)..where((tbl) => tbl.id.equals(fileId))).write(
-      FileSyncItemsCompanion(
-        uploadStatus: Value(status),
-      ),
+    await customUpdate(
+      'UPDATE file_sync_items SET upload_status = ? WHERE id = ?',
+      variables: [
+        Variable.withString(status),
+        Variable.withString(fileId),
+      ],
     );
   }
 
   Future<Map<String, dynamic>> getSyncStatistics() async {
-    final totalQuery = selectOnly(syncItems)..addColumns([syncItems.id.count()]);
-    final total = await totalQuery.getSingle();
-
-    final completedQuery = selectOnly(syncItems)
-      ..addColumns([syncItems.id.count()])
-      ..where(syncItems.status.contains('"state":"completed"'));
-    final completed = await completedQuery.getSingle();
-
-    final failedQuery = selectOnly(syncItems)
-      ..addColumns([syncItems.id.count()])
-      ..where(syncItems.status.contains('"state":"failed"'));
-    final failed = await failedQuery.getSingle();
-
-    final pendingQuery = selectOnly(syncItems)
-      ..addColumns([syncItems.id.count()])
-      ..where(syncItems.status.contains('"state":"pending"'));
-    final pending = await pendingQuery.getSingle();
+    final total = await customSelect('SELECT COUNT(*) as count FROM sync_items').getSingle();
+    final completed = await customSelect('SELECT COUNT(*) as count FROM sync_items WHERE status LIKE \'%"state":"completed"%\'').getSingle();
+    final failed = await customSelect('SELECT COUNT(*) as count FROM sync_items WHERE status LIKE \'%"state":"failed"%\'').getSingle();
+    final pending = await customSelect('SELECT COUNT(*) as count FROM sync_items WHERE status LIKE \'%"state":"pending"%\'').getSingle();
 
     return {
-      'total': total.read(syncItems.id.count()) ?? 0,
-      'completed': completed.read(syncItems.id.count()) ?? 0,
-      'failed': failed.read(syncItems.id.count()) ?? 0,
-      'pending': pending.read(syncItems.id.count()) ?? 0,
+      'total': total.data['count'] ?? 0,
+      'completed': completed.data['count'] ?? 0,
+      'failed': failed.data['count'] ?? 0,
+      'pending': pending.data['count'] ?? 0,
     };
   }
 
-  Stream<List<SyncItemData>> watchSyncQueue() {
-    return select(syncItems).watch();
+  Stream<List<Map<String, dynamic>>> watchSyncQueue() {
+    // Use Stream.periodic for polling since customSelectStream doesn't exist
+    return Stream.periodic(const Duration(seconds: 2)).asyncMap((_) async {
+      final results = await customSelect('SELECT * FROM sync_items ORDER BY priority DESC, created_at ASC').get();
+      return results.map((row) => row.data).toList();
+    });
   }
 
-  Stream<List<EntityMetadata>> watchEntityMetadata(String entityType) {
-    return (select(entityMetadataTable)..where((tbl) => tbl.entityType.equals(entityType))).watch();
+  Stream<List<Map<String, dynamic>>> watchEntityMetadata(String entityType) {
+    // Use Stream.periodic for polling
+    return Stream.periodic(const Duration(seconds: 2)).asyncMap((_) async {
+      final results = await customSelect(
+        'SELECT * FROM entity_metadata WHERE entity_type = ?',
+        variables: [Variable.withString(entityType)],
+      ).get();
+      return results.map((row) => row.data).toList();
+    });
   }
 
   Future<void> performMaintenance() async {
@@ -200,7 +218,6 @@ class SyncDatabase extends _$SyncDatabase {
       debugPrint('Cleaned up $cleaned old sync items');
 
       await customStatement('VACUUM');
-
       await customStatement('ANALYZE');
 
       debugPrint('Database maintenance completed');
@@ -211,49 +228,57 @@ class SyncDatabase extends _$SyncDatabase {
 
   Future<Map<String, dynamic>> exportDebugData() async {
     try {
-      final syncItemsData = await select(syncItems).get();
-      final metadataData = await select(entityMetadataTable).get();
-      final configsData = await select(syncConfigs).get();
-      final filesData = await select(fileSyncItems).get();
+      final syncItemsData = await customSelect('SELECT * FROM sync_items LIMIT 100').get();
+      final metadataData = await customSelect('SELECT * FROM entity_metadata LIMIT 100').get();
+      final configsData = await customSelect('SELECT * FROM sync_configs').get();
+      final filesData = await customSelect('SELECT * FROM file_sync_items LIMIT 100').get();
 
       return {
         'sync_items': syncItemsData
-            .map((item) => {
-                  'id': item.id,
-                  'entity_type': item.entityType,
-                  'entity_id': item.entityId,
-                  'created_at': item.createdAt.toIso8601String(),
-                  'status': item.status,
-                  'priority': item.priority,
-                })
+            .map(
+              (row) => {
+                'id': row.data['id'],
+                'entity_type': row.data['entity_type'],
+                'entity_id': row.data['entity_id'],
+                'created_at': row.data['created_at']?.toString(),
+                'status': row.data['status'],
+                'priority': row.data['priority'],
+              },
+            )
             .toList(),
         'metadata': metadataData
-            .map((meta) => {
-                  'id': meta.id,
-                  'entity_type': meta.entityType,
-                  'entity_id': meta.entityId,
-                  'needs_sync': meta.needsSync,
-                  'sync_status': meta.syncStatus,
-                  'created_at': meta.createdAt.toIso8601String(),
-                  'updated_at': meta.updatedAt.toIso8601String(),
-                })
+            .map(
+              (row) => {
+                'id': row.data['id'],
+                'entity_type': row.data['entity_type'],
+                'entity_id': row.data['entity_id'],
+                'needs_sync': row.data['needs_sync'],
+                'sync_status': row.data['sync_status'],
+                'created_at': row.data['created_at']?.toString(),
+                'updated_at': row.data['updated_at']?.toString(),
+              },
+            )
             .toList(),
         'configs': configsData
-            .map((config) => {
-                  'entity_type': config.entityType,
-                  'auto_sync': config.autoSync,
-                  'max_retries': config.maxRetries,
-                  'batch_size': config.batchSize,
-                })
+            .map(
+              (row) => {
+                'entity_type': row.data['entity_type'],
+                'auto_sync': row.data['auto_sync'],
+                'max_retries': row.data['max_retries'],
+                'batch_size': row.data['batch_size'],
+              },
+            )
             .toList(),
         'files': filesData
-            .map((file) => {
-                  'id': file.id,
-                  'entity_id': file.entityId,
-                  'file_name': file.fileName,
-                  'file_size': file.fileSize,
-                  'upload_status': file.uploadStatus,
-                })
+            .map(
+              (row) => {
+                'id': row.data['id'],
+                'entity_id': row.data['entity_id'],
+                'file_name': row.data['file_name'],
+                'file_size': row.data['file_size'],
+                'upload_status': row.data['upload_status'],
+              },
+            )
             .toList(),
       };
     } catch (e) {
@@ -282,6 +307,6 @@ void debugPrint(String message) {
   if (const bool.fromEnvironment('dart.vm.product')) {
     return;
   }
-
+  // ignore: avoid_print
   print(message);
 }
