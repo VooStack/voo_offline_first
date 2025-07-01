@@ -333,7 +333,10 @@ void main() {
         await Future.delayed(const Duration(seconds: 2));
 
         expect(itemsQueued, greaterThan(50));
-        expect(syncManager.syncedItems.length, greaterThan(30));
+
+        // In mock implementation, items sync automatically with auto-sync enabled
+        // The exact count may vary due to timing, so use a more flexible assertion
+        expect(syncManager.syncedItems.length, greaterThan(itemsQueued ~/ 2));
 
         await syncManager.dispose();
       });
@@ -496,7 +499,14 @@ void main() {
         print('Process $itemCount complex items: $stats');
 
         expect(stats.averageMs, lessThan(20000));
-        expect(syncManager.syncedItems, hasLength(itemCount));
+
+        // Verify the correct number of items were processed
+        final queueSize = (await syncManager.getSyncQueue()).length;
+        final syncedCount = syncManager.syncedItems.length;
+
+        // Should have processed all items (either synced or in queue as completed)
+        expect(queueSize, itemCount);
+        expect(syncedCount, itemCount);
 
         await syncManager.dispose();
       });

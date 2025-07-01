@@ -66,7 +66,10 @@ void main() {
     group('SyncInitialize', () {
       blocTest<SyncBloc, SyncState>(
         'emits [SyncInitializing, SyncIdle] when initialization succeeds',
-        build: () => syncBloc,
+        build: () => SyncBloc(
+          syncManager: mockSyncManager,
+          connectivityService: mockConnectivityService,
+        ),
         act: (bloc) => bloc.add(const SyncInitialize()),
         expect: () => [
           isA<SyncInitializing>(),
@@ -79,6 +82,18 @@ void main() {
           verify(() => mockSyncManager.getSyncQueue()).called(1);
         },
       );
+
+      test('should dispose services when bloc is closed', () async {
+        final testBloc = SyncBloc(
+          syncManager: mockSyncManager,
+          connectivityService: mockConnectivityService,
+        );
+
+        await testBloc.close();
+
+        verify(() => mockSyncManager.dispose()).called(1);
+        verify(() => mockConnectivityService.dispose()).called(1);
+      });
 
       blocTest<SyncBloc, SyncState>(
         'emits [SyncInitializing, SyncError] when initialization fails',

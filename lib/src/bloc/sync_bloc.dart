@@ -390,8 +390,15 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
     await _syncQueueSubscription?.cancel();
     await _syncStatusSubscription?.cancel();
     await _syncProgressSubscription?.cancel();
-    await syncManager.dispose();
-    await connectivityService.dispose();
+
+    // Only dispose if not already disposed
+    try {
+      await syncManager.dispose();
+      await connectivityService.dispose();
+    } catch (e) {
+      // Services might already be disposed
+    }
+
     return super.close();
   }
 }

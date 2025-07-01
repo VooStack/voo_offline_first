@@ -150,13 +150,21 @@ class ValidationException extends OfflineException {
 
   @override
   String toString() {
-    final details = [
-      if (fieldName != null) 'Field: $fieldName',
-      if (value != null) 'Value: $value',
-      if (code != null) 'Code: $code',
-    ].join(', ');
+    final details = <String>[];
 
-    return 'ValidationException: $message${details.isNotEmpty ? ' ($details)' : ''}';
+    if (fieldName != null) {
+      details.add('Field: $fieldName');
+    }
+
+    // Always include value, even if null
+    details.add('Value: $value');
+
+    if (code != null) {
+      details.add('Code: $code');
+    }
+
+    final detailsString = details.isNotEmpty ? ' (${details.join(', ')})' : '';
+    return 'ValidationException: $message$detailsString';
   }
 }
 

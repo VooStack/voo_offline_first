@@ -5,13 +5,15 @@ import 'package:voo_offline_first/voo_offline_first.dart';
 /// Mock implementation of SyncManager for testing
 class MockSyncManagerImpl implements SyncManager {
   final Map<String, SyncItem> _syncQueue = {};
-  final StreamController<List<SyncItem>> _queueController = StreamController.broadcast();
-  final StreamController<SyncStatus> _statusController = StreamController.broadcast();
-  final StreamController<SyncProgress> _progressController = StreamController.broadcast();
+  StreamController<List<SyncItem>>? _queueController;
+  StreamController<SyncStatus>? _statusController;
+  StreamController<SyncProgress>? _progressController;
 
   bool _isInitialized = false;
   bool _autoSyncEnabled = false;
+  bool _isDisposed = false;
   SyncStatus _currentStatus = SyncStatus.idle;
+  Timer? _autoSyncTimer;
 
   // Track sync operations for testing
   final List<SyncItem> syncedItems = [];
@@ -21,16 +23,26 @@ class MockSyncManagerImpl implements SyncManager {
   @override
   Future<void> initialize() async {
     if (_isInitialized) return;
+
+    _queueController = StreamController.broadcast();
+    _statusController = StreamController.broadcast();
+    _progressController = StreamController.broadcast();
+
     _isInitialized = true;
     _currentStatus = SyncStatus.idle;
-    _statusController.add(_currentStatus);
+    _safeAddToStatusController(_currentStatus);
   }
 
   @override
   Future<void> queueForSync(SyncItem item) async {
     _ensureInitialized();
     _syncQueue[item.id] = item;
-    _emitQueueUpdate();
+    _safeEmitQueueUpdate();
+
+    // Trigger auto-sync if enabled
+    if (_autoSyncEnabled && !_isDisposed) {
+      _scheduleAutoSync();
+    }
   }
 
   @override
@@ -39,82 +51,108 @@ class MockSyncManagerImpl implements SyncManager {
     for (final item in items) {
       _syncQueue[item.id] = item;
     }
-    _emitQueueUpdate();
+    _safeEmitQueueUpdate();
+
+    // Trigger auto-sync if enabled
+    if (_autoSyncEnabled && !_isDisposed) {
+      _scheduleAutoSync();
+    }
   }
 
   @override
   Future<void> startAutoSync() async {
     _ensureInitialized();
     _autoSyncEnabled = true;
+
+    // Trigger immediate sync if there are pending items
+    final pendingItems = _syncQueue.values.where((item) => item.status.isPending).toList();
+    if (pendingItems.isNotEmpty && !_isDisposed) {
+      _scheduleAutoSync();
+    }
   }
 
   @override
   Future<void> stopAutoSync() async {
     _ensureInitialized();
     _autoSyncEnabled = false;
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = null;
   }
 
   @override
   Future<void> syncNow() async {
     _ensureInitialized();
+    if (_isDisposed) return;
 
     if (_currentStatus == SyncStatus.syncing) return;
 
     _currentStatus = SyncStatus.syncing;
-    _statusController.add(_currentStatus);
+    _safeAddToStatusController(_currentStatus);
 
     final pendingItems = _syncQueue.values.where((item) => item.status.isPending).toList();
 
     if (pendingItems.isEmpty) {
       _currentStatus = SyncStatus.idle;
-      _statusController.add(_currentStatus);
+      _safeAddToStatusController(_currentStatus);
       return;
     }
 
-    // Simulate sync progress
-    for (int i = 0; i < pendingItems.length; i++) {
-      final item = pendingItems[i];
+    try {
+      // Simulate sync progress
+      for (int i = 0; i < pendingItems.length; i++) {
+        if (_isDisposed) break;
 
-      _progressController.add(
-        SyncProgress(
-          total: pendingItems.length,
-          completed: i,
-          failed: 0,
-          inProgress: 1,
-        ),
-      );
+        final item = pendingItems[i];
 
-      // Update item status to uploading
-      _syncQueue[item.id] = item.copyWith(
-        status: item.status.copyWith(state: UploadState.uploading),
-      );
-      _emitQueueUpdate();
+        _safeAddToProgressController(
+          SyncProgress(
+            total: pendingItems.length,
+            completed: i,
+            failed: 0,
+            inProgress: 1,
+          ),
+        );
 
-      // Simulate upload time
-      await Future.delayed(const Duration(milliseconds: 10));
+        // Update item status to uploading
+        _syncQueue[item.id] = item.copyWith(
+          status: item.status.copyWith(state: UploadState.uploading),
+        );
+        _safeEmitQueueUpdate();
 
-      // Mark as completed (for simplicity, all items succeed in mock)
-      _syncQueue[item.id] = item.copyWith(
-        status: item.status.copyWith(
-          state: UploadState.completed,
-          uploadedAt: DateTime.now(),
-        ),
-      );
-      syncedItems.add(item);
-      _emitQueueUpdate();
+        // Simulate upload time
+        await Future.delayed(const Duration(milliseconds: 10));
+        if (_isDisposed) break;
+
+        // Mark as completed (for simplicity, all items succeed in mock)
+        _syncQueue[item.id] = item.copyWith(
+          status: item.status.copyWith(
+            state: UploadState.completed,
+            uploadedAt: DateTime.now(),
+          ),
+        );
+        syncedItems.add(item);
+        _safeEmitQueueUpdate();
+      }
+
+      if (!_isDisposed) {
+        _safeAddToProgressController(
+          SyncProgress(
+            total: pendingItems.length,
+            completed: pendingItems.length,
+            failed: 0,
+            inProgress: 0,
+          ),
+        );
+
+        _currentStatus = SyncStatus.idle;
+        _safeAddToStatusController(_currentStatus);
+      }
+    } catch (e) {
+      if (!_isDisposed) {
+        _currentStatus = SyncStatus.error;
+        _safeAddToStatusController(_currentStatus);
+      }
     }
-
-    _progressController.add(
-      SyncProgress(
-        total: pendingItems.length,
-        completed: pendingItems.length,
-        failed: 0,
-        inProgress: 0,
-      ),
-    );
-
-    _currentStatus = SyncStatus.idle;
-    _statusController.add(_currentStatus);
   }
 
   @override
@@ -130,7 +168,7 @@ class MockSyncManagerImpl implements SyncManager {
       retriedItems.add(item.id);
     }
 
-    _emitQueueUpdate();
+    _safeEmitQueueUpdate();
   }
 
   @override
@@ -150,7 +188,7 @@ class MockSyncManagerImpl implements SyncManager {
       status: item.status.copyWith(state: UploadState.pending),
     );
     retriedItems.add(syncItemId);
-    _emitQueueUpdate();
+    _safeEmitQueueUpdate();
 
     return SyncResult.success();
   }
@@ -165,7 +203,7 @@ class MockSyncManagerImpl implements SyncManager {
         status: item.status.copyWith(state: UploadState.cancelled),
       );
       cancelledItems.add(syncItemId);
-      _emitQueueUpdate();
+      _safeEmitQueueUpdate();
     }
   }
 
@@ -174,7 +212,7 @@ class MockSyncManagerImpl implements SyncManager {
     _ensureInitialized();
 
     _syncQueue.removeWhere((_, item) => item.status.isCompleted);
-    _emitQueueUpdate();
+    _safeEmitQueueUpdate();
   }
 
   @override
@@ -207,17 +245,20 @@ class MockSyncManagerImpl implements SyncManager {
 
   @override
   Stream<List<SyncItem>> watchSyncQueue() {
-    return _queueController.stream;
+    _ensureInitialized();
+    return _queueController!.stream;
   }
 
   @override
   Stream<SyncStatus> watchSyncStatus() {
-    return _statusController.stream;
+    _ensureInitialized();
+    return _statusController!.stream;
   }
 
   @override
   Stream<SyncProgress> watchSyncProgress() {
-    return _progressController.stream;
+    _ensureInitialized();
+    return _progressController!.stream;
   }
 
   @override
@@ -232,24 +273,62 @@ class MockSyncManagerImpl implements SyncManager {
 
   @override
   Future<void> dispose() async {
-    await _queueController.close();
-    await _statusController.close();
-    await _progressController.close();
+    if (_isDisposed) return;
+
+    _isDisposed = true;
+    _autoSyncEnabled = false;
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = null;
+
+    await _queueController?.close();
+    await _statusController?.close();
+    await _progressController?.close();
+
+    _queueController = null;
+    _statusController = null;
+    _progressController = null;
     _isInitialized = false;
   }
 
   void _ensureInitialized() {
-    if (!_isInitialized) {
-      throw Exception('MockSyncManager not initialized');
+    if (!_isInitialized || _isDisposed) {
+      throw Exception('MockSyncManager not initialized or disposed');
     }
   }
 
-  void _emitQueueUpdate() {
-    _queueController.add(_syncQueue.values.toList());
+  void _safeEmitQueueUpdate() {
+    if (!_isDisposed && _queueController != null && !_queueController!.isClosed) {
+      _queueController!.add(_syncQueue.values.toList());
+    }
+  }
+
+  void _safeAddToStatusController(SyncStatus status) {
+    if (!_isDisposed && _statusController != null && !_statusController!.isClosed) {
+      _statusController!.add(status);
+    }
+  }
+
+  void _safeAddToProgressController(SyncProgress progress) {
+    if (!_isDisposed && _progressController != null && !_progressController!.isClosed) {
+      _progressController!.add(progress);
+    }
+  }
+
+  void _scheduleAutoSync() {
+    if (_isDisposed) return;
+
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = Timer(const Duration(milliseconds: 50), () {
+      if (_autoSyncEnabled && !_isDisposed && _syncQueue.values.any((item) => item.status.isPending)) {
+        syncNow();
+      }
+    });
   }
 
   // Helper methods for testing
   void simulateFailedItem(String syncItemId, String error) {
+    if (_isDisposed) return;
+
     final item = _syncQueue[syncItemId];
     if (item != null) {
       _syncQueue[syncItemId] = item.copyWith(
@@ -259,13 +338,15 @@ class MockSyncManagerImpl implements SyncManager {
           retryCount: item.status.retryCount + 1,
         ),
       );
-      _emitQueueUpdate();
+      _safeEmitQueueUpdate();
     }
   }
 
   void simulateError() {
+    if (_isDisposed) return;
+
     _currentStatus = SyncStatus.error;
-    _statusController.add(_currentStatus);
+    _safeAddToStatusController(_currentStatus);
   }
 
   void reset() {
@@ -275,6 +356,8 @@ class MockSyncManagerImpl implements SyncManager {
     retriedItems.clear();
     _autoSyncEnabled = false;
     _currentStatus = SyncStatus.idle;
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = null;
   }
 }
 
@@ -431,9 +514,24 @@ class MockOfflineRepository<T> implements OfflineRepository<T> {
   @override
   Future<List<T>> saveAll(List<T> entities) async {
     final savedEntities = <T>[];
+
+    // Process each entity sequentially to ensure proper ID generation
     for (final entity in entities) {
-      savedEntities.add(await save(entity));
+      final id = _getId(entity);
+      final entityWithId = id.isEmpty ? _setId(entity, 'mock-id-${DateTime.now().millisecondsSinceEpoch}-${savedEntities.length}') : entity;
+      final finalId = _getId(entityWithId);
+
+      _storage[finalId] = entityWithId;
+      _uploadStatuses[finalId] = const UploadStatus(state: UploadState.pending);
+      _pendingSyncItems.add(finalId);
+
+      savedEntities.add(entityWithId);
+
+      // Small delay to ensure unique timestamps
+      await Future.delayed(const Duration(microseconds: 1));
     }
+
+    _emitUpdates();
     return savedEntities;
   }
 

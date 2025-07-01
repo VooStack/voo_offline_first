@@ -441,11 +441,15 @@ class OfflineBanner extends StatelessWidget {
             children: [
               const Icon(Icons.wifi_off, color: Colors.white),
               const SizedBox(width: 8),
-              const Text(
-                'You are offline. Changes will sync when connection is restored.',
-                style: TextStyle(color: Colors.white),
+              Expanded(
+                child: Text(
+                  'You are offline. Changes will sync when connection is restored.',
+                  style: const TextStyle(color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               TextButton(
                 onPressed: () {
                   context.read<SyncBloc>().add(const SyncTriggerSync());

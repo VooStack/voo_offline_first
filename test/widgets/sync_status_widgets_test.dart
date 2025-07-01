@@ -325,6 +325,9 @@ void main() {
     });
 
     testWidgets('retry button triggers sync', (tester) async {
+      // Set a larger test screen size to avoid overflow
+      await tester.binding.setSurfaceSize(const Size(1200, 800));
+
       await tester.pumpWidget(createWidget(isConnected: false));
       await tester.pump();
 
@@ -332,10 +335,14 @@ void main() {
       final retryButton = find.text('Retry');
       expect(retryButton, findsOneWidget);
 
-      await tester.tap(retryButton);
+      // Use warnIfMissed: false to avoid warnings about off-screen taps
+      await tester.tap(retryButton, warnIfMissed: false);
       await tester.pump();
 
       verify(() => mockSyncBloc.add(const SyncTriggerSync())).called(1);
+
+      // Reset surface size
+      addTearDown(() => tester.binding.setSurfaceSize(null));
     });
   });
 
