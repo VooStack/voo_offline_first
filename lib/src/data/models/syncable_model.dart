@@ -1,6 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:voo_offline_first/src/core/enums/sync_status.dart';
 import '../../domain/entities/syncable_entity.dart';
+import '../../core/enums/sync_status.dart';
 import 'base_model.dart';
 
 /// Base model for syncable data
@@ -33,11 +33,7 @@ abstract class SyncableModel<T extends SyncableEntity> extends BaseModel<T> {
   });
 
   /// Mark as deleted
-  SyncableModel<T> markAsDeleted() {
-    return copyWithSyncStatus(
-      syncStatus: SyncStatus.pending,
-    );
-  }
+  SyncableModel<T> markAsDeleted() => copyWithSyncStatus(syncStatus: SyncStatus.pending);
 
   /// Check if needs sync
   bool get needsSync => syncStatus == SyncStatus.pending || syncStatus == SyncStatus.error;

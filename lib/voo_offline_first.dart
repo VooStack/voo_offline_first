@@ -1,9 +1,10 @@
 /// Offline First Package - A Flutter package for building offline-first applications
-library offline_first;
+library voo_offline_first;
 
 // Core exports
 export 'src/core/database/drift_database.dart';
 export 'src/core/database/database_config.dart';
+export 'src/core/enums/sync_status.dart';
 export 'src/core/error/exceptions.dart';
 export 'src/core/error/failures.dart';
 export 'src/core/network/network_info.dart';

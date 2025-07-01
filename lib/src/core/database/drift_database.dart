@@ -5,9 +5,9 @@ import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
-import 'package:voo_offline_first/src/core/enums/sync_status.dart';
 
 import 'database_config.dart';
+import '../enums/sync_status.dart';
 
 /// Base Drift database class that applications should extend
 abstract class OfflineFirstDatabase extends GeneratedDatabase {

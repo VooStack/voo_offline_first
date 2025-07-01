@@ -1,6 +1,5 @@
-import 'package:voo_offline_first/src/core/enums/sync_status.dart';
-
 import 'base_entity.dart';
+import '../../core/enums/sync_status.dart';
 
 /// Base entity for data that needs to be synchronized
 abstract class SyncableEntity extends BaseEntity {
