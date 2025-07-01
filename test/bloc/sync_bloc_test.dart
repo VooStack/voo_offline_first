@@ -9,7 +9,16 @@ class MockSyncManager extends Mock implements SyncManager {}
 
 class MockConnectivityService extends Mock implements ConnectivityService {}
 
+// Fake classes for fallback values
+class FakeSyncItem extends Fake implements SyncItem {}
+
 void main() {
+  // Register fallback values
+  setUpAll(() {
+    registerFallbackValue(FakeSyncItem());
+    registerFallbackValue(<SyncItem>[]);
+  });
+
   group('SyncBloc', () {
     late SyncBloc syncBloc;
     late MockSyncManager mockSyncManager;
@@ -46,8 +55,8 @@ void main() {
       );
     });
 
-    tearDown(() {
-      syncBloc.close();
+    tearDown(() async {
+      await syncBloc.close();
     });
 
     test('initial state is SyncInitial', () {
@@ -73,9 +82,12 @@ void main() {
 
       blocTest<SyncBloc, SyncState>(
         'emits [SyncInitializing, SyncError] when initialization fails',
-        build: () => syncBloc,
-        setUp: () {
+        build: () {
           when(() => mockSyncManager.initialize()).thenThrow(Exception('Initialization failed'));
+          return SyncBloc(
+            syncManager: mockSyncManager,
+            connectivityService: mockConnectivityService,
+          );
         },
         act: (bloc) => bloc.add(const SyncInitialize()),
         expect: () => [

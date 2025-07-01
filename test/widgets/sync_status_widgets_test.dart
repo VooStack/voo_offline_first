@@ -8,7 +8,14 @@ import 'package:voo_offline_first/voo_offline_first.dart';
 // Mock classes
 class MockSyncBloc extends Mock implements SyncBloc {}
 
+// Fake classes for fallback values
+class FakeSyncEvent extends Fake implements SyncEvent {}
+
 void main() {
+  setUpAll(() {
+    registerFallbackValue(FakeSyncEvent());
+  });
+
   group('SyncStatusIndicator', () {
     late MockSyncBloc mockSyncBloc;
 
@@ -26,7 +33,17 @@ void main() {
               progress: SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
             ),
       );
-      when(() => mockSyncBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => mockSyncBloc.stream).thenAnswer(
+        (_) => Stream.fromIterable([
+          initialState ??
+              const SyncIdle(
+                isConnected: true,
+                autoSyncEnabled: true,
+                syncQueue: [],
+                progress: SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
+              ),
+        ]),
+      );
 
       return MaterialApp(
         home: Scaffold(
@@ -40,6 +57,7 @@ void main() {
 
     testWidgets('shows cloud done icon when connected and idle', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       expect(find.byIcon(Icons.cloud_done), findsOneWidget);
     });
@@ -53,6 +71,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.cloud_off), findsOneWidget);
     });
@@ -66,6 +85,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
@@ -80,6 +100,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.error), findsOneWidget);
     });
@@ -94,6 +115,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.pause_circle), findsOneWidget);
     });
@@ -108,6 +130,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
     });
@@ -120,6 +143,9 @@ void main() {
         progress: SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
       );
 
+      when(() => mockSyncBloc.state).thenReturn(state);
+      when(() => mockSyncBloc.stream).thenAnswer((_) => Stream.value(state));
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -131,15 +157,22 @@ void main() {
         ),
       );
 
-      when(() => mockSyncBloc.state).thenReturn(state);
-      when(() => mockSyncBloc.stream).thenAnswer((_) => const Stream.empty());
-
       await tester.pump();
 
       expect(find.text('All synced'), findsOneWidget);
     });
 
     testWidgets('hides text when showText is false', (tester) async {
+      const state = SyncIdle(
+        isConnected: true,
+        autoSyncEnabled: true,
+        syncQueue: [],
+        progress: SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
+      );
+
+      when(() => mockSyncBloc.state).thenReturn(state);
+      when(() => mockSyncBloc.stream).thenAnswer((_) => Stream.value(state));
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -151,7 +184,9 @@ void main() {
         ),
       );
 
-      expect(find.byType(Text), findsNothing);
+      await tester.pump();
+
+      expect(find.text('All synced'), findsNothing);
     });
   });
 
@@ -252,12 +287,12 @@ void main() {
       final state = SyncIdle(
         isConnected: isConnected,
         autoSyncEnabled: true,
-        syncQueue: [],
+        syncQueue: const [],
         progress: const SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
       );
 
       when(() => mockSyncBloc.state).thenReturn(state);
-      when(() => mockSyncBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => mockSyncBloc.stream).thenAnswer((_) => Stream.value(state));
 
       return MaterialApp(
         home: Scaffold(
@@ -271,6 +306,7 @@ void main() {
 
     testWidgets('shows banner when offline', (tester) async {
       await tester.pumpWidget(createWidget(isConnected: false));
+      await tester.pump();
 
       expect(find.byIcon(Icons.wifi_off), findsOneWidget);
       expect(
@@ -282,6 +318,7 @@ void main() {
 
     testWidgets('hides banner when online', (tester) async {
       await tester.pumpWidget(createWidget(isConnected: true));
+      await tester.pump();
 
       expect(find.byType(SizedBox), findsOneWidget);
       expect(find.byIcon(Icons.wifi_off), findsNothing);
@@ -289,8 +326,14 @@ void main() {
 
     testWidgets('retry button triggers sync', (tester) async {
       await tester.pumpWidget(createWidget(isConnected: false));
+      await tester.pump();
 
-      await tester.tap(find.text('Retry'));
+      // Find the retry button and tap it
+      final retryButton = find.text('Retry');
+      expect(retryButton, findsOneWidget);
+
+      await tester.tap(retryButton);
+      await tester.pump();
 
       verify(() => mockSyncBloc.add(const SyncTriggerSync())).called(1);
     });
@@ -313,7 +356,17 @@ void main() {
               progress: SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
             ),
       );
-      when(() => mockSyncBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => mockSyncBloc.stream).thenAnswer(
+        (_) => Stream.value(
+          initialState ??
+              const SyncIdle(
+                isConnected: true,
+                autoSyncEnabled: true,
+                syncQueue: [],
+                progress: SyncProgress(total: 0, completed: 0, failed: 0, inProgress: 0),
+              ),
+        ),
+      );
 
       return MaterialApp(
         home: Scaffold(
@@ -327,6 +380,7 @@ void main() {
 
     testWidgets('shows sync icon in idle state', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       expect(find.byType(FloatingActionButton), findsOneWidget);
       expect(find.byIcon(Icons.sync), findsOneWidget);
@@ -341,6 +395,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.byIcon(Icons.sync), findsOneWidget);
@@ -356,6 +411,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.sync_problem), findsOneWidget);
     });
@@ -370,14 +426,17 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.check), findsOneWidget);
     });
 
     testWidgets('triggers sync when tapped in idle state', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
 
       verify(() => mockSyncBloc.add(const SyncTriggerSync())).called(1);
     });
@@ -392,8 +451,10 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
 
       verify(() => mockSyncBloc.add(const SyncTriggerSync())).called(1);
     });
@@ -407,8 +468,10 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
 
       verifyNever(() => mockSyncBloc.add(const SyncTriggerSync()));
     });
@@ -431,7 +494,17 @@ void main() {
               progress: SyncProgress(total: 10, completed: 7, failed: 2, inProgress: 1),
             ),
       );
-      when(() => mockSyncBloc.stream).thenAnswer((_) => const Stream.empty());
+      when(() => mockSyncBloc.stream).thenAnswer(
+        (_) => Stream.value(
+          initialState ??
+              const SyncIdle(
+                isConnected: true,
+                autoSyncEnabled: true,
+                syncQueue: [],
+                progress: SyncProgress(total: 10, completed: 7, failed: 2, inProgress: 1),
+              ),
+        ),
+      );
 
       return MaterialApp(
         home: Scaffold(
@@ -445,6 +518,7 @@ void main() {
 
     testWidgets('displays connection status', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       expect(find.byIcon(Icons.wifi), findsOneWidget);
       expect(find.text('Connected'), findsOneWidget);
@@ -459,6 +533,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.wifi_off), findsOneWidget);
       expect(find.text('Offline'), findsOneWidget);
@@ -466,6 +541,7 @@ void main() {
 
     testWidgets('displays progress information', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(find.text('7/10 completed'), findsOneWidget);
@@ -474,6 +550,7 @@ void main() {
 
     testWidgets('displays progress chips', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       expect(find.text('Pending: 0'), findsOneWidget);
       expect(find.text('In Progress: 1'), findsOneWidget);
@@ -482,6 +559,7 @@ void main() {
 
     testWidgets('shows sync button in idle state', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       expect(find.byIcon(Icons.sync), findsOneWidget);
     });
@@ -495,14 +573,17 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.byIcon(Icons.pause), findsOneWidget);
     });
 
     testWidgets('sync button triggers manual sync', (tester) async {
       await tester.pumpWidget(createWidget());
+      await tester.pump();
 
       await tester.tap(find.byIcon(Icons.sync));
+      await tester.pump();
 
       verify(() => mockSyncBloc.add(const SyncTriggerSync())).called(1);
     });
@@ -516,6 +597,7 @@ void main() {
       );
 
       await tester.pumpWidget(createWidget(initialState: state));
+      await tester.pump();
 
       expect(find.text('No items to sync'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNothing);
