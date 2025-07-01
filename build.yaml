@@ -21,7 +21,6 @@ targets:
           use_data_class_name_for_companions: true
           case_from_dart_to_sql: snake_case
           use_sql_column_name_as_json_key: true
-          # Removed invalid options: use_column_name_as_json_key and compact_query_methods
         generate_for:
           include:
             - lib/src/database/sync_database.dart
