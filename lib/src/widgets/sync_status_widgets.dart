@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
 import '../bloc/sync_bloc.dart';
 import '../bloc/sync_event.dart';
 import '../bloc/sync_state.dart';
@@ -229,7 +231,7 @@ class SyncProgressCard extends StatelessWidget {
   Widget _buildProgressChip(String label, int count, Color color) {
     return Chip(
       label: Text('$label: $count'),
-      backgroundColor: color.withOpacity(0.1),
+      backgroundColor: color.withValues(alpha: 0.1),
       labelStyle: TextStyle(color: color),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
@@ -375,8 +377,8 @@ class SyncFab extends StatelessWidget {
               context.read<SyncBloc>().add(const SyncTriggerSync());
             }
           },
-          child: _buildFabIcon(state),
           backgroundColor: _getFabColor(state),
+          child: _buildFabIcon(state),
         );
       },
     );

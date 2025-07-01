@@ -1,3 +1,4 @@
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
 import 'package:voo_offline_first/voo_offline_first.dart';
 
 /// Abstract interface for managing sync operations
@@ -63,14 +64,6 @@ abstract class SyncManager {
   Future<void> dispose();
 }
 
-/// Overall sync status
-enum SyncStatus {
-  idle,
-  syncing,
-  paused,
-  error,
-}
-
 /// Sync strategy options
 enum SyncStrategy {
   /// Sync immediately when connectivity is available
@@ -81,24 +74,6 @@ enum SyncStrategy {
 
   /// Sync on a schedule
   scheduled,
-}
-
-/// Sync progress information
-class SyncProgress {
-  const SyncProgress({
-    required this.total,
-    required this.completed,
-    required this.failed,
-    required this.inProgress,
-  });
-
-  final int total;
-  final int completed;
-  final int failed;
-  final int inProgress;
-
-  int get pending => total - completed - failed - inProgress;
-  double get completionPercentage => total > 0 ? completed / total : 0.0;
 }
 
 /// Sync statistics

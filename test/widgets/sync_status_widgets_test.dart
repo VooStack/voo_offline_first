@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
 import 'package:voo_offline_first/voo_offline_first.dart';
 
 // Mock classes

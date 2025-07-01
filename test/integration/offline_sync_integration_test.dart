@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
 import 'package:voo_offline_first/voo_offline_first.dart';
 import '../mocks/mock_implementations.dart';
 

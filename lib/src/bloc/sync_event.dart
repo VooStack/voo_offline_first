@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
-import '../core/models/sync_item.dart';
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
+
 
 /// Base class for all sync events
 abstract class SyncEvent extends Equatable {
@@ -117,30 +119,4 @@ class SyncProgressUpdated extends SyncEvent {
 
   @override
   List<Object?> get props => [progress];
-}
-
-/// Sync status enum (from sync_manager interface)
-enum SyncStatus {
-  idle,
-  syncing,
-  paused,
-  error,
-}
-
-/// Sync progress model (from sync_manager interface)
-class SyncProgress {
-  const SyncProgress({
-    required this.total,
-    required this.completed,
-    required this.failed,
-    required this.inProgress,
-  });
-
-  final int total;
-  final int completed;
-  final int failed;
-  final int inProgress;
-
-  int get pending => total - completed - failed - inProgress;
-  double get completionPercentage => total > 0 ? completed / total : 0.0;
 }

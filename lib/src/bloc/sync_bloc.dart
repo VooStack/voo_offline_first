@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:voo_offline_first/src/bloc/sync_event.dart';
-import 'package:voo_offline_first/voo_offline_first.dart' hide SyncStatus, SyncProgress;
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
 
 /// BLoC for managing sync operations and state
 class SyncBloc extends Bloc<SyncEvent, SyncState> {
@@ -72,7 +72,7 @@ class SyncBloc extends Bloc<SyncEvent, SyncState> {
           );
 
       _syncProgressSubscription = syncManager.watchSyncProgress().listen(
-            (progress) => add(SyncProgressUpdated(progress as SyncProgress)),
+            (progress) => add(SyncProgressUpdated(progress)),
           );
 
       emit(

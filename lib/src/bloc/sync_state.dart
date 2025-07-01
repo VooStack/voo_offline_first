@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
-import '../core/models/sync_item.dart';
-import 'sync_event.dart';
+import 'package:voo_offline_first/src/core/models/sync_progress.dart';
+import 'package:voo_offline_first/voo_offline_first.dart';
 
 /// Base class for all sync states
 abstract class SyncState extends Equatable {
@@ -223,4 +223,12 @@ class SyncSuccess extends SyncState {
       message: message ?? this.message,
     );
   }
+}
+
+/// Sync status enum (from sync_manager interface)
+enum SyncStatus {
+  idle,
+  syncing,
+  paused,
+  error,
 }
